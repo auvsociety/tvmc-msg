@@ -78,10 +78,10 @@ class MotionController:
 
         self._thruster_pub.publish(t)
 
-    def set_control_mode(self, dof: DoF, mode: ControlMode) -> None:
+    def set_control_mode(self, dof: DoF, control: ControlMode) -> None:
         mode = msg.ControlMode()
         mode.DoF = dof.value
-        mode.Mode = mode.value
+        mode.Mode = control.value
 
         self._control_mode_pub.publish(mode)
         self.controlModes[dof] = mode

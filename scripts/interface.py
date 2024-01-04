@@ -1,0 +1,184 @@
+from sshkeyboard import listen_keyboard, stop_listening
+from tvmc import MotionController, DoF, ControlMode
+import blessings
+import rospy
+from time import sleep
+from threading import Thread
+from std_msgs.msg import Float32MultiArray, Int32MultiArray
+
+
+HEAVE_KP = 1
+HEAVE_KI = 1
+HEAVE_KD = 1
+HEAVE_ACCEPTABLE_ERROR = 1
+
+PITCH_KP = 1
+PITCH_KI = 1
+PITCH_KD = 1
+PITCH_ACCEPTABLE_ERROR = 1
+
+ROLL_KP = 1
+ROLL_KI = 1
+ROLL_KD = 1
+ROLL_ACCEPTABLE_ERROR = 1
+
+YAW_KP = 1
+YAW_KI = 1
+YAW_KD = 1
+YAW_ACCEPTABLE_ERROR = 1
+
+
+m = MotionController()
+term = blessings.Terminal()
+
+closed_loop_enabled = set()
+currently_doing = set()
+diagnostics_data = {}
+keep_rendering = True
+
+
+def render():
+    while keep_rendering:
+        print(term.clear())
+        print(term.red(term.bold("TVMC Controller")))
+        print("Press esc. at any point to exit.\n")
+        x = 1000
+
+        while keep_rendering and x:
+            with term.location(0, 4):
+                print(term.bold("Diagnostics"), term.clear_eol())
+                for diagnostic in diagnostics_data:
+                    print(f"{diagnostic}:", diagnostics_data[diagnostic], term.clear_eol())
+            
+                print(term.clear_eol())
+                print(term.bold("Control"), term.clear_eol())
+                
+                if len(closed_loop_enabled):
+                    print("PID: ", [x.name for x in closed_loop_enabled], term.clear_eol())
+                
+                print("Manual Thrust: ", [x.name for x in currently_doing], term.clear_eol())
+            
+                print(term.clear_eol())
+                print(term.clear_eol())
+                print(term.clear_eol())
+
+            x = x - 1
+            sleep(.01)
+
+
+def thrust(dof, rev=1):
+    def p():
+        if dof in closed_loop_enabled:
+            return
+        
+        m.set_thrust(dof, 50  * rev)
+        currently_doing.add(dof)
+
+    def r():
+        if dof in closed_loop_enabled:
+            return
+        
+        m.set_thrust(dof, 0)
+        currently_doing.remove(dof)
+
+    return p, r
+
+
+def pid_enable(dof):
+    m.set_control_mode(dof, ControlMode.CLOSED_LOOP)
+    closed_loop_enabled.add(dof)
+    
+    if dof == DoF.HEAVE:
+        m.set_pid_constants(DoF.HEAVE, HEAVE_KP, HEAVE_KI, HEAVE_KD, HEAVE_ACCEPTABLE_ERROR)
+    
+    if dof == DoF.PITCH:
+        m.set_pid_constants(DoF.PITCH, PITCH_KP, PITCH_KI, PITCH_KD, PITCH_ACCEPTABLE_ERROR)
+    
+    if dof == DoF.ROLL:
+        m.set_pid_constants(DoF.ROLL, ROLL_KP, ROLL_KI, ROLL_KD, ROLL_ACCEPTABLE_ERROR)
+    
+    if dof == DoF.YAW:
+        m.set_pid_constants(DoF.YAW, YAW_KP, YAW_KI, YAW_KD, YAW_ACCEPTABLE_ERROR)
+
+
+def pid_disable(dof):
+    m.set_control_mode(dof, ControlMode.OPEN_LOOP)
+    closed_loop_enabled.remove(dof)
+
+
+def pid(dof):
+    def toggle():
+        if dof in closed_loop_enabled:
+            pid_disable(dof)
+        else:
+            pid_enable(dof)
+
+    return [toggle, lambda: None]
+
+
+mp = {
+    'w': thrust(DoF.SURGE, 1), 
+    'a': thrust(DoF.YAW, 1), 
+    's': thrust(DoF.SURGE, -1), 
+    'd': thrust(DoF.YAW, -1),
+    'z': thrust(DoF.HEAVE, 1), 
+    'x': thrust(DoF.HEAVE, -1), 
+    'q': thrust(DoF.SWAY, 1), 
+    'e': thrust(DoF.SWAY, -1), 
+    'h': pid(DoF.HEAVE),
+    'j': pid(DoF.PITCH),
+    'k': pid(DoF.ROLL),
+    'l': pid(DoF.YAW),
+}
+
+
+def press(key):
+    if key in mp:
+        mp[key][0]()
+    
+
+def release(key):
+    if key in mp:
+        mp[key][1]()
+
+
+def diagnostics():
+    def set(name, data):
+        diagnostics_data[name] = data
+
+    # subscribe to any topics that you'd like to subscribe to, 
+    # and then make them update diagnostics_data to have stuff update
+    # in real time
+
+    # for example, here's thrust and pwm
+    rospy.Subscriber(
+        '/rose_tvmc/thrust', 
+        Float32MultiArray, 
+        lambda x: set('Thrust', x.data)
+    )
+
+    rospy.Subscriber(
+        '/rose_tvmc/pwm', 
+        Int32MultiArray, 
+        lambda x: set('PWM', x.data)
+    )
+
+
+if __name__ == "__main__":
+    print(term.red("Starting nodes.\n\n"))
+    m.start()
+
+    renderer = Thread(target=render, daemon=True)
+    renderer.start()
+
+    diagnostics()
+
+    listen_keyboard(
+        on_press=press,
+        on_release=release,
+    )
+
+    keep_rendering = False
+    print(term.clear())
+    print("Bye-bye!\n\n")
+    exit(0)
