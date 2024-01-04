@@ -4,6 +4,7 @@ from rospy import Publisher
 from .enums import DoF, Command, ControlMode
 import rose_tvmc_msg.msg as msg
 from threading import Thread
+from time import sleep
 
 
 PREFIX = "/rose_tvmc/control"
@@ -39,14 +40,14 @@ class MotionController:
             f"{PREFIX}/target_point", msg.TargetPoint, queue_size=50
         )
 
+        # create spinner thread
+        self._spinner = Thread(target=self._spin, daemon=True)
+        self._spinner.start()
+
         # ensure graceful shutdown
         self._tvmc_process = None
         self._pwmc_process = None
         rospy.on_shutdown(self.__del__)
-
-        # create spinner thread
-        self._spinner = Thread(target=self._spin, daemon=True)
-        self._spinner.start()
 
     def _spin(self) -> None:
         rospy.spin()
@@ -58,8 +59,11 @@ class MotionController:
         launch = roslaunch.scriptapi.ROSLaunch()
         launch.start()
 
-        self._tvmc_process = launch.launch(tvmc_node)
         self._pwmc_process = launch.launch(pwmc_node)
+        self._tvmc_process = launch.launch(tvmc_node)
+
+        # sleep for a second to ensure nodes are all started up
+        sleep(1)
 
     def set_thrust(self, dof: DoF, thrust: float) -> None:
         # ensure control mode is in open loop mode
