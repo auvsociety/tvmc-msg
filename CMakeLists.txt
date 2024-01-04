@@ -22,6 +22,8 @@ add_message_files(
   Thrust.msg
 )
 
+catkin_python_setup()
+
 generate_messages(
   DEPENDENCIES
   std_msgs
