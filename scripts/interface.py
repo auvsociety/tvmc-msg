@@ -34,7 +34,7 @@ term = blessings.Terminal()
 
 closed_loop_enabled = set()
 currently_doing = set()
-diagnostics_data = {}
+diagnostics = {}
 keep_rendering = True
 
 
@@ -51,8 +51,8 @@ def render():
                 with term.location(0, 4):
                     print(term.bold("Diagnostics"))
                     
-                    for diagnostic in diagnostics_data:
-                        print(f"{diagnostic}:", diagnostics_data[diagnostic], term.clear_eol())
+                    for diagnostic in diagnostics:
+                        print(f"{diagnostic}:", diagnostics[diagnostic], term.clear_eol())
                 
                     print(term.clear_eol())
                     print(term.bold("Control"), term.clear_eol())
@@ -144,9 +144,9 @@ def release(key):
         mp[key][1]()
 
 
-def diagnostics():
+def data():
     def set(name, data):
-        diagnostics_data[name] = data
+        diagnostics[name] = data
 
     # subscribe to any topics that you'd like to subscribe to, 
     # and then make them update diagnostics_data to have stuff update
@@ -165,6 +165,9 @@ def diagnostics():
         lambda x: set('PWM', x.data)
     )
 
+    # you should also set up subcribers to 
+    # update the current point for all PID controllers here
+
 
 if __name__ == "__main__":
     print(term.red("Starting nodes.\n\n"))
@@ -173,7 +176,7 @@ if __name__ == "__main__":
     renderer = Thread(target=render, daemon=True)
     renderer.start()
 
-    diagnostics()
+    data()
 
     listen_keyboard(
         on_press=press,

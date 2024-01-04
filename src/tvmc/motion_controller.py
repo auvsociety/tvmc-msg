@@ -93,11 +93,6 @@ class MotionController:
         self._command_pub.publish(command_msg)
 
     def set_current_point(self, dof: DoF, current_point: float):
-        if self.controlModes[dof] == ControlMode.OPEN_LOOP:
-            raise AssertionError(
-                "Cannot set current state for DoF {dof} in open loop mode."
-            )
-
         point = msg.CurrentPoint()
         point.DoF = dof.value
         point.Current = current_point
@@ -134,11 +129,6 @@ class MotionController:
         self._pid_limits_pub.publish(limits)
 
     def set_target_point(self, dof: DoF, target: float) -> None:
-        if self.controlModes[dof] == ControlMode.OPEN_LOOP:
-            raise AssertionError(
-                "Cannot set target point for DoF {dof} in open loop mode."
-            )
-
         point = msg.TargetPoint()
         point.DoF = dof.value
         point.Target = target
