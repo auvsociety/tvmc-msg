@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from sshkeyboard import listen_keyboard, stop_listening
 from tvmc import MotionController, DoF, ControlMode
 import blessings
@@ -39,31 +40,32 @@ keep_rendering = True
 
 def render():
     while keep_rendering:
-        print(term.clear())
-        print(term.red(term.bold("TVMC Controller")))
-        print("Press esc. at any point to exit.\n")
-        x = 1000
+        with term.hidden_cursor():
+            print(term.fullscreen())
+            print(term.clear())
+            print(term.red(term.bold("TVMC Controller")))
+            print("Press esc. at any point to exit.\n")
+            x = 1000
 
-        while keep_rendering and x:
-            with term.location(0, 4):
-                print(term.bold("Diagnostics"), term.clear_eol())
-                for diagnostic in diagnostics_data:
-                    print(f"{diagnostic}:", diagnostics_data[diagnostic], term.clear_eol())
-            
-                print(term.clear_eol())
-                print(term.bold("Control"), term.clear_eol())
+            while keep_rendering and x:
+                with term.location(0, 4):
+                    print(term.bold("Diagnostics"))
+                    
+                    for diagnostic in diagnostics_data:
+                        print(f"{diagnostic}:", diagnostics_data[diagnostic], term.clear_eol())
                 
-                if len(closed_loop_enabled):
-                    print("PID: ", [x.name for x in closed_loop_enabled], term.clear_eol())
+                    print(term.clear_eol())
+                    print(term.bold("Control"), term.clear_eol())
+                    
+                    if len(closed_loop_enabled):
+                        print("PID: ", [x.name for x in closed_loop_enabled], term.clear_eol())
+                    
+                    print("Manual Thrust: ", [x.name for x in currently_doing], term.clear_eol())
                 
-                print("Manual Thrust: ", [x.name for x in currently_doing], term.clear_eol())
-            
-                print(term.clear_eol())
-                print(term.clear_eol())
-                print(term.clear_eol())
-
-            x = x - 1
-            sleep(.01)
+                    print(term.clear_eol())
+                x = x - 1
+                sleep(0.01)
+    print(term.exit_fullscreen())
 
 
 def thrust(dof, rev=1):
