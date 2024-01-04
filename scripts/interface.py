@@ -5,7 +5,8 @@ import blessings
 import rospy
 from time import sleep
 from threading import Thread
-from std_msgs.msg import Float32MultiArray, Int32MultiArray
+from std_msgs.msg import Float32MultiArray, Int32MultiArray, Float64
+from geometry_msgs.msg import Vector3
 
 
 HEAVE_KP = 1
@@ -54,18 +55,28 @@ def render():
             while keep_rendering and x:
                 with term.location(0, 4):
                     print(term.bold("Diagnostics"))
-                    
+
                     for diagnostic in diagnostics:
-                        print(f"{diagnostic}:", diagnostics[diagnostic], term.clear_eol())
-                
+                        print(
+                            f"{diagnostic}:", diagnostics[diagnostic], term.clear_eol()
+                        )
+
                     print(term.clear_eol())
                     print(term.bold("Control"), term.clear_eol())
-                    
+
                     if len(closed_loop_enabled):
-                        print("PID: ", [x.name for x in closed_loop_enabled], term.clear_eol())
-                    
-                    print("Manual Thrust: ", [x.name for x in currently_doing], term.clear_eol())
-                
+                        print(
+                            "PID: ",
+                            [x.name for x in closed_loop_enabled],
+                            term.clear_eol(),
+                        )
+
+                    print(
+                        "Manual Thrust: ",
+                        [x.name for x in currently_doing],
+                        term.clear_eol(),
+                    )
+
                     print(term.clear_eol())
                 x = x - 1
                 sleep(0.01)
@@ -76,14 +87,14 @@ def thrust(dof, rev=1):
     def p():
         if dof in closed_loop_enabled:
             return
-        
-        m.set_thrust(dof, 50  * rev)
+
+        m.set_thrust(dof, 50 * rev)
         currently_doing.add(dof)
 
     def r():
         if dof in closed_loop_enabled:
             return
-        
+
         m.set_thrust(dof, 0)
         currently_doing.remove(dof)
 
@@ -93,19 +104,23 @@ def thrust(dof, rev=1):
 def pid_enable(dof):
     m.set_control_mode(dof, ControlMode.CLOSED_LOOP)
     closed_loop_enabled.add(dof)
-    
+
     if dof == DoF.HEAVE:
-        m.set_pid_constants(DoF.HEAVE, HEAVE_KP, HEAVE_KI, HEAVE_KD, HEAVE_ACCEPTABLE_ERROR)
+        m.set_pid_constants(
+            DoF.HEAVE, HEAVE_KP, HEAVE_KI, HEAVE_KD, HEAVE_ACCEPTABLE_ERROR
+        )
         m.set_target_point(DoF.HEAVE, HEAVE_TARGET)
-    
+
     if dof == DoF.PITCH:
-        m.set_pid_constants(DoF.PITCH, PITCH_KP, PITCH_KI, PITCH_KD, PITCH_ACCEPTABLE_ERROR)
+        m.set_pid_constants(
+            DoF.PITCH, PITCH_KP, PITCH_KI, PITCH_KD, PITCH_ACCEPTABLE_ERROR
+        )
         m.set_target_point(DoF.PITCH, PITCH_TARGET)
-    
+
     if dof == DoF.ROLL:
         m.set_pid_constants(DoF.ROLL, ROLL_KP, ROLL_KI, ROLL_KD, ROLL_ACCEPTABLE_ERROR)
         m.set_target_point(DoF.ROLL, ROLL_TARGET)
-    
+
     if dof == DoF.YAW:
         m.set_pid_constants(DoF.YAW, YAW_KP, YAW_KI, YAW_KD, YAW_ACCEPTABLE_ERROR)
         m.set_target_point(DoF.YAW, YAW_TARGET)
@@ -127,25 +142,25 @@ def pid(dof):
 
 
 mp = {
-    'w': thrust(DoF.SURGE, 1), 
-    'a': thrust(DoF.YAW, 1), 
-    's': thrust(DoF.SURGE, -1), 
-    'd': thrust(DoF.YAW, -1),
-    'z': thrust(DoF.HEAVE, 1), 
-    'x': thrust(DoF.HEAVE, -1), 
-    'q': thrust(DoF.SWAY, 1), 
-    'e': thrust(DoF.SWAY, -1), 
-    'h': pid(DoF.HEAVE),
-    'j': pid(DoF.PITCH),
-    'k': pid(DoF.ROLL),
-    'l': pid(DoF.YAW),
+    "w": thrust(DoF.SURGE, 1),
+    "a": thrust(DoF.YAW, 1),
+    "s": thrust(DoF.SURGE, -1),
+    "d": thrust(DoF.YAW, -1),
+    "z": thrust(DoF.HEAVE, 1),
+    "x": thrust(DoF.HEAVE, -1),
+    "q": thrust(DoF.SWAY, 1),
+    "e": thrust(DoF.SWAY, -1),
+    "h": pid(DoF.HEAVE),
+    "j": pid(DoF.PITCH),
+    "k": pid(DoF.ROLL),
+    "l": pid(DoF.YAW),
 }
 
 
 def press(key):
     if key in mp:
         mp[key][0]()
-    
+
 
 def release(key):
     if key in mp:
@@ -156,25 +171,48 @@ def data():
     def set(name, data):
         diagnostics[name] = data
 
-    # subscribe to any topics that you'd like to subscribe to, 
+    # subscribe to any topics that you'd like to subscribe to,
     # and then make them update diagnostics_data to have stuff update
     # in real time
 
-    # for example, here's thrust and pwm
-    rospy.Subscriber(
-        '/rose_tvmc/thrust', 
-        Float32MultiArray, 
-        lambda x: set('Thrust', x.data)
-    )
-
-    rospy.Subscriber(
-        '/rose_tvmc/pwm', 
-        Int32MultiArray, 
-        lambda x: set('PWM', x.data)
-    )
-
-    # you should also set up subcribers to 
+    # you should also set up subcribers to
     # update the current point for all PID controllers here
+
+    rospy.Subscriber(
+        "/rose_tvmc/thrust", Float32MultiArray, lambda x: set("Thrust", x.data)
+    )
+
+    rospy.Subscriber("/rose_tvmc/pwm", Int32MultiArray, lambda x: set("PWM", x.data))
+
+    rospy.Subscriber(
+        "/linear_acceleration",
+        Vector3,
+        lambda x: set("Linear Acceleration", (x.x, x.y, x.z)),
+    )
+
+    rospy.Subscriber(
+        "/angular_velocity", Vector3, lambda x: set("Angular Velocity", (x.x, x.y, x.z))
+    )
+
+    rospy.Subscriber(
+        "/magnetic_field", Vector3, lambda x: set("Magnetic Field", (x.x, x.y, x.z))
+    )
+
+    def orientation(x):
+        m.set_current_point(DoF.ROLL, x.x)
+        m.set_current_point(DoF.PITCH, x.y)
+        m.set_current_point(DoF.YAW, x.z)
+        set("Roll", x.x)
+        set("Pitch", x.y)
+        set("Yaw", x.z)
+
+    rospy.Subscriber("/euler_orientation", Vector3, orientation)
+
+    def depth(d):
+        m.set_current_point(DoF.HEAVE, d.data)
+        set("Depth", d.data)
+
+    rospy.Subscriber("/depth_data", Float64, depth)
 
 
 if __name__ == "__main__":
