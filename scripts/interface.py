@@ -11,21 +11,25 @@ from std_msgs.msg import Float32MultiArray, Int32MultiArray
 HEAVE_KP = 1
 HEAVE_KI = 1
 HEAVE_KD = 1
+HEAVE_TARGET = 20
 HEAVE_ACCEPTABLE_ERROR = 1
 
 PITCH_KP = 1
 PITCH_KI = 1
 PITCH_KD = 1
+PITCH_TARGET = 0
 PITCH_ACCEPTABLE_ERROR = 1
 
 ROLL_KP = 1
 ROLL_KI = 1
 ROLL_KD = 1
+ROLL_TARGET = 0
 ROLL_ACCEPTABLE_ERROR = 1
 
 YAW_KP = 1
 YAW_KI = 1
 YAW_KD = 1
+YAW_TARGET = 0
 YAW_ACCEPTABLE_ERROR = 1
 
 
@@ -92,15 +96,19 @@ def pid_enable(dof):
     
     if dof == DoF.HEAVE:
         m.set_pid_constants(DoF.HEAVE, HEAVE_KP, HEAVE_KI, HEAVE_KD, HEAVE_ACCEPTABLE_ERROR)
+        m.set_target_point(DoF.HEAVE, HEAVE_TARGET)
     
     if dof == DoF.PITCH:
         m.set_pid_constants(DoF.PITCH, PITCH_KP, PITCH_KI, PITCH_KD, PITCH_ACCEPTABLE_ERROR)
+        m.set_target_point(DoF.PITCH, PITCH_TARGET)
     
     if dof == DoF.ROLL:
         m.set_pid_constants(DoF.ROLL, ROLL_KP, ROLL_KI, ROLL_KD, ROLL_ACCEPTABLE_ERROR)
+        m.set_target_point(DoF.ROLL, ROLL_TARGET)
     
     if dof == DoF.YAW:
         m.set_pid_constants(DoF.YAW, YAW_KP, YAW_KI, YAW_KD, YAW_ACCEPTABLE_ERROR)
+        m.set_target_point(DoF.YAW, YAW_TARGET)
 
 
 def pid_disable(dof):
