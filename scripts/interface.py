@@ -182,7 +182,7 @@ def data():
         "/rose_tvmc/thrust", Float32MultiArray, lambda x: set("Thrust", x.data)
     )
 
-    rospy.Subscriber("/rose_tvmc/pwm", Int32MultiArray, lambda x: set("PWM", x.data))
+    rospy.Subscriber("/pwm-values", Int32MultiArray, lambda x: set("PWM", x.data))
 
     rospy.Subscriber(
         "/linear_acceleration",
