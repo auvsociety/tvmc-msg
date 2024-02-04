@@ -178,17 +178,8 @@ def data():
     # you should also set up subcribers to
     # update the current point for all PID controllers here
 
-    # for the simulator, pass thrust onto /control/thrusters
-    sim_thruster = rospy.Publisher('/control/thrusters', Float32MultiArray, queue_size=1)
-    sim_thruster_data = Float32MultiArray()
-
-    def handle_thrust(x):
-        set("Thrust", x.data)
-        sim_thruster_data.data = [a / 100 for a in x.data]
-        sim_thruster.publish(sim_thruster_data)
-
     rospy.Subscriber(
-        "/rose_tvmc/thrust", Float32MultiArray, handle_thrust
+        "/rose_tvmc/thrust", Float32MultiArray, lambda x: set("Thrust", x.data)
     )
 
     rospy.Subscriber("/pwm_values", Int32MultiArray, lambda x: set("PWM", x.data))
