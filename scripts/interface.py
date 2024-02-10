@@ -9,11 +9,11 @@ from std_msgs.msg import Float32MultiArray, Int32MultiArray, Float64
 from geometry_msgs.msg import Vector3
 
 
-HEAVE_KP = 1
-HEAVE_KI = 1
-HEAVE_KD = 1
+HEAVE_KP = 0.1
+HEAVE_KI = 0
+HEAVE_KD = 0.1
 HEAVE_TARGET = 20
-HEAVE_ACCEPTABLE_ERROR = 1
+HEAVE_ACCEPTABLE_ERROR = 0.1
 
 PITCH_KP = 1
 PITCH_KI = 1
@@ -88,7 +88,7 @@ def thrust(dof, rev=1):
         if dof in closed_loop_enabled:
             return
 
-        m.set_thrust(dof, 50 * rev)
+        m.set_thrust(dof, 1. * rev)
         currently_doing.add(dof)
 
     def r():
@@ -109,6 +109,7 @@ def pid_enable(dof):
         m.set_pid_constants(
             DoF.HEAVE, HEAVE_KP, HEAVE_KI, HEAVE_KD, HEAVE_ACCEPTABLE_ERROR
         )
+        m.set_pid_limits(DoF.HEAVE, -2, 2, -25, 25)
         m.set_target_point(DoF.HEAVE, HEAVE_TARGET)
 
     if dof == DoF.PITCH:
@@ -209,15 +210,15 @@ def data():
     rospy.Subscriber("/euler_orientation", Vector3, orientation)
 
     def depth(d):
-        m.set_current_point(DoF.HEAVE, d.data)
-        set("Depth", d.data)
+        m.set_current_point(DoF.HEAVE, d.data * 100)
+        set("Depth", d.data * 100)
 
     rospy.Subscriber("/depth_data", Float64, depth)
 
 
 if __name__ == "__main__":
     print(term.red("Starting nodes.\n\n"))
-    m.start()
+    # m.start()
 
     renderer = Thread(target=render, daemon=True)
     renderer.start()
