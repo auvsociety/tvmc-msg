@@ -9,11 +9,11 @@ from std_msgs.msg import Float32MultiArray, Int32MultiArray, Float64
 from geometry_msgs.msg import Vector3
 
 
-HEAVE_KP = 1
-HEAVE_KI = 1
-HEAVE_KD = 1
-HEAVE_TARGET = 20
-HEAVE_ACCEPTABLE_ERROR = 1
+HEAVE_KP = 100
+HEAVE_KI = 0
+HEAVE_KD = 10
+HEAVE_TARGET = 3
+HEAVE_ACCEPTABLE_ERROR = 0.1
 
 PITCH_KP = 1
 PITCH_KI = 1
