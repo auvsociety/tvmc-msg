@@ -88,7 +88,7 @@ def thrust(dof, rev=1):
         if dof in closed_loop_enabled:
             return
 
-        m.set_thrust(dof, 1. * rev)
+        m.set_thrust(dof, 50 * rev)
         currently_doing.add(dof)
 
     def r():
@@ -218,7 +218,7 @@ def data():
 
 if __name__ == "__main__":
     print(term.red("Starting nodes.\n\n"))
-    # m.start()
+    m.start()
 
     renderer = Thread(target=render, daemon=True)
     renderer.start()
