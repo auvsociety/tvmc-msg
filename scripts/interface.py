@@ -210,8 +210,8 @@ def data():
     rospy.Subscriber("/euler_orientation", Vector3, orientation)
 
     def depth(d):
-        m.set_current_point(DoF.HEAVE, d.data * 100)
-        set("Depth", d.data * 100)
+        m.set_current_point(DoF.HEAVE, d.data)
+        set("Depth", d.data)
 
     rospy.Subscriber("/depth_data", Float64, depth)
 
