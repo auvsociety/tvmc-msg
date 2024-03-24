@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import rospy
-from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Int32MultiArray
 import blessings
 from sshkeyboard import listen_keyboard, stop_listening
 
@@ -10,8 +10,8 @@ NUM_THRUSTERS = 7
 
 term = blessings.Terminal()
 
-pub = rospy.Publisher('/control/pwm', Float32MultiArray, queue_size=10)
-msg = Float32MultiArray()
+pub = rospy.Publisher('/control/pwm', Int32MultiArray, queue_size=10)
+msg = Int32MultiArray()
 
 
 def test_thruster(thruster: int):
