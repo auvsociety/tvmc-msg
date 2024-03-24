@@ -9,15 +9,18 @@ from std_msgs.msg import Float32MultiArray, Int32MultiArray, Float64
 from geometry_msgs.msg import Vector3
 
 
-HEAVE_KP = 10
-HEAVE_KI = 0
-HEAVE_KD = 10
-HEAVE_TARGET = 3
-HEAVE_ACCEPTABLE_ERROR = 0.1
+DATA_SOURCE = "sensors"
 
-PITCH_KP = 1
-PITCH_KI = 1
-PITCH_KD = 1
+
+HEAVE_KP = 100
+HEAVE_KI = 0.5
+HEAVE_KD = 7.5
+HEAVE_TARGET = 0.9
+HEAVE_ACCEPTABLE_ERROR = 0.05
+
+PITCH_KP = 20
+PITCH_KI = 0.5
+PITCH_KD = 5
 PITCH_TARGET = 0
 PITCH_ACCEPTABLE_ERROR = 1
 
@@ -109,7 +112,7 @@ def pid_enable(dof):
         m.set_pid_constants(
             DoF.HEAVE, HEAVE_KP, HEAVE_KI, HEAVE_KD, HEAVE_ACCEPTABLE_ERROR
         )
-        m.set_pid_limits(DoF.HEAVE, -2, 2, -25, 25)
+        m.set_pid_limits(DoF.HEAVE, -10, 10, -25, 25)
         m.set_target_point(DoF.HEAVE, HEAVE_TARGET)
 
     if dof == DoF.PITCH:
@@ -183,20 +186,20 @@ def data():
         "/rose_tvmc/thrust", Float32MultiArray, lambda x: set("Thrust", x.data)
     )
 
-    rospy.Subscriber("/pwm_values", Int32MultiArray, lambda x: set("PWM", x.data))
+    rospy.Subscriber("/control/pwm", Int32MultiArray, lambda x: set("PWM", x.data))
 
     rospy.Subscriber(
-        "/linear_acceleration",
+        f"/{DATA_SOURCE}/linear_acceleration",
         Vector3,
         lambda x: set("Linear Acceleration", (x.x, x.y, x.z)),
     )
 
     rospy.Subscriber(
-        "/angular_velocity", Vector3, lambda x: set("Angular Velocity", (x.x, x.y, x.z))
+        f"/{DATA_SOURCE}/angular_velocity", Vector3, lambda x: set("Angular Velocity", (x.x, x.y, x.z))
     )
 
     rospy.Subscriber(
-        "/magnetic_field", Vector3, lambda x: set("Magnetic Field", (x.x, x.y, x.z))
+        f"/{DATA_SOURCE}/magnetic_field", Vector3, lambda x: set("Magnetic Field", (x.x, x.y, x.z))
     )
 
     def orientation(x):
@@ -207,13 +210,13 @@ def data():
         set("Pitch", x.y)
         set("Yaw", x.z)
 
-    rospy.Subscriber("/euler_orientation", Vector3, orientation)
+    rospy.Subscriber(f"/{DATA_SOURCE}/orientation", Vector3, orientation)
 
     def depth(d):
         m.set_current_point(DoF.HEAVE, d.data)
         set("Depth", d.data)
 
-    rospy.Subscriber("/depth_data", Float64, depth)
+    rospy.Subscriber(f"/{DATA_SOURCE}/depth", Float64, depth)
 
 
 if __name__ == "__main__":
