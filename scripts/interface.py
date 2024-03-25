@@ -9,20 +9,20 @@ from std_msgs.msg import Float32MultiArray, Int32MultiArray, Float64
 from geometry_msgs.msg import Vector3
 
 
-DATA_SOURCE = "sensors"
+DATA_SOURCE = "emulation"
 
 
-HEAVE_KP = 100
-HEAVE_KI = 0.5
-HEAVE_KD = 7.5
-HEAVE_TARGET = 0.9
+HEAVE_KP = 153
+HEAVE_KI = 0
+HEAVE_KD = 51
+HEAVE_TARGET = 1
 HEAVE_ACCEPTABLE_ERROR = 0.05
 
-PITCH_KP = 20
-PITCH_KI = 0.5
-PITCH_KD = 5
+PITCH_KP = -1.5
+PITCH_KI = -0
+PITCH_KD = -0.8
 PITCH_TARGET = 0
-PITCH_ACCEPTABLE_ERROR = 1
+PITCH_ACCEPTABLE_ERROR = 1.5
 
 ROLL_KP = 1
 ROLL_KI = 1
@@ -30,11 +30,11 @@ ROLL_KD = 1
 ROLL_TARGET = 0
 ROLL_ACCEPTABLE_ERROR = 1
 
-YAW_KP = 1
-YAW_KI = 1
-YAW_KD = 1
+YAW_KP = -2
+YAW_KI = 0
+YAW_KD = -0.7
 YAW_TARGET = 0
-YAW_ACCEPTABLE_ERROR = 1
+YAW_ACCEPTABLE_ERROR = 2
 
 
 m = MotionController()
@@ -119,6 +119,7 @@ def pid_enable(dof):
         m.set_pid_constants(
             DoF.PITCH, PITCH_KP, PITCH_KI, PITCH_KD, PITCH_ACCEPTABLE_ERROR
         )
+        m.set_pid_limits(DoF.PITCH, -10, 10, -25, 25)
         m.set_target_point(DoF.PITCH, PITCH_TARGET)
 
     if dof == DoF.ROLL:
