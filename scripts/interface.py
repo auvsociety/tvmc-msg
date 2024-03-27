@@ -9,14 +9,14 @@ from std_msgs.msg import Float32MultiArray, Int32MultiArray, Float64
 from geometry_msgs.msg import Vector3
 
 
-DATA_SOURCE = "emulation"
+DATA_SOURCE = "sensors"
 
 
-HEAVE_KP = 153
-HEAVE_KI = 0
-HEAVE_KD = 51
-HEAVE_TARGET = 1
-HEAVE_ACCEPTABLE_ERROR = 0.05
+HEAVE_KP = -170
+HEAVE_KI = -10
+HEAVE_KD = -60
+HEAVE_TARGET = 15
+HEAVE_ACCEPTABLE_ERROR = 0.025
 HEAVE_OFFSET = 8
 
 PITCH_KP = 1
