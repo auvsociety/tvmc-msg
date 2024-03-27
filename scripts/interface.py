@@ -17,24 +17,25 @@ HEAVE_KI = 0
 HEAVE_KD = 51
 HEAVE_TARGET = 1
 HEAVE_ACCEPTABLE_ERROR = 0.05
+HEAVE_OFFSET = 8
 
-PITCH_KP = -1.5
-PITCH_KI = -0
-PITCH_KD = -0.8
+PITCH_KP = 1
+PITCH_KI = 0
+PITCH_KD = 0.4
 PITCH_TARGET = 0
 PITCH_ACCEPTABLE_ERROR = 1.5
 
 ROLL_KP = 1
-ROLL_KI = 1
-ROLL_KD = 1
+ROLL_KI = 0
+ROLL_KD = 0.4
 ROLL_TARGET = 0
-ROLL_ACCEPTABLE_ERROR = 1
+ROLL_ACCEPTABLE_ERROR = 1.5
 
-YAW_KP = -2
+YAW_KP = 0.86
 YAW_KI = 0
-YAW_KD = -0.7
-YAW_TARGET = 0
-YAW_ACCEPTABLE_ERROR = 2
+YAW_KD = 0.3
+YAW_TARGET = 45
+YAW_ACCEPTABLE_ERROR = 1.5
 
 
 m = MotionController()
@@ -109,9 +110,7 @@ def pid_enable(dof):
     closed_loop_enabled.add(dof)
 
     if dof == DoF.HEAVE:
-        m.set_pid_constants(
-            DoF.HEAVE, HEAVE_KP, HEAVE_KI, HEAVE_KD, HEAVE_ACCEPTABLE_ERROR
-        )
+        m.set_pid_constants(DoF.HEAVE, HEAVE_KP, HEAVE_KI, HEAVE_KD, HEAVE_ACCEPTABLE_ERROR, HEAVE_OFFSET)
         m.set_pid_limits(DoF.HEAVE, -10, 10, -25, 25)
         m.set_target_point(DoF.HEAVE, HEAVE_TARGET)
 

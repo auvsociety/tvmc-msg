@@ -100,16 +100,17 @@ class MotionController:
         self._current_state_pub.publish(point)
 
     def set_pid_constants(
-        self, dof: DoF, kp: float, ki: float, kd: float, acceptable_error: float
+        self, dof: DoF, kp: float, ki: float, kd: float, acceptable_error: float, ko: float = 0
     ) -> None:
-        pidMsg = msg.PidConstants()
-        pidMsg.DoF = dof.value
-        pidMsg.Kp = kp
-        pidMsg.Ki = ki
-        pidMsg.Kd = kd
-        pidMsg.AcceptableError = acceptable_error
+        pid_msg = msg.PidConstants()
+        pid_msg.DoF = dof.value
+        pid_msg.Kp = kp
+        pid_msg.Ki = ki
+        pid_msg.Kd = kd
+        pid_msg.AcceptableError = acceptable_error
+        pid_msg.Ko = ko
 
-        self._pid_constants_pub.publish(pidMsg)
+        self._pid_constants_pub.publish(pid_msg)
 
     def set_pid_limits(
         self,
