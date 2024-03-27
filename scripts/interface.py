@@ -5,7 +5,7 @@ import blessings
 import rospy
 from time import sleep
 from threading import Thread
-from std_msgs.msg import Float32MultiArray, Int32MultiArray, Float64
+from std_msgs.msg import Float32MultiArray, Int32MultiArray, Float32
 from geometry_msgs.msg import Vector3
 
 
@@ -216,7 +216,7 @@ def data():
         m.set_current_point(DoF.HEAVE, d.data)
         set("Depth", d.data)
 
-    rospy.Subscriber(f"/{DATA_SOURCE}/depth", Float64, depth)
+    rospy.Subscriber(f"/{DATA_SOURCE}/depth", Float32, depth)
 
 
 if __name__ == "__main__":
