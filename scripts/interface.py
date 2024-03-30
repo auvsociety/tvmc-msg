@@ -9,19 +9,19 @@ from std_msgs.msg import Float32MultiArray, Int32MultiArray, Float32
 from geometry_msgs.msg import Vector3
 
 
-DATA_SOURCE = "sensors"
+DATA_SOURCE = "emulation"
 
 
 HEAVE_KP = -170
 HEAVE_KI = -10
 HEAVE_KD = -60
-HEAVE_TARGET = 15
+HEAVE_TARGET = 0.6
 HEAVE_ACCEPTABLE_ERROR = 0.025
 HEAVE_OFFSET = 8
 
-PITCH_KP = 1
+PITCH_KP = 10
 PITCH_KI = 0
-PITCH_KD = 0.4
+PITCH_KD = 4
 PITCH_TARGET = 0
 PITCH_ACCEPTABLE_ERROR = 1.5
 
@@ -110,7 +110,14 @@ def pid_enable(dof):
     closed_loop_enabled.add(dof)
 
     if dof == DoF.HEAVE:
-        m.set_pid_constants(DoF.HEAVE, HEAVE_KP, HEAVE_KI, HEAVE_KD, HEAVE_ACCEPTABLE_ERROR, HEAVE_OFFSET)
+        m.set_pid_constants(
+            DoF.HEAVE,
+            HEAVE_KP,
+            HEAVE_KI,
+            HEAVE_KD,
+            HEAVE_ACCEPTABLE_ERROR,
+            HEAVE_OFFSET,
+        )
         m.set_pid_limits(DoF.HEAVE, -10, 10, -25, 25)
         m.set_target_point(DoF.HEAVE, HEAVE_TARGET)
 
@@ -147,9 +154,9 @@ def pid(dof):
 
 mp = {
     "w": thrust(DoF.SURGE, 1),
-    "a": thrust(DoF.YAW, 1),
+    "a": thrust(DoF.YAW, -1),
     "s": thrust(DoF.SURGE, -1),
-    "d": thrust(DoF.YAW, -1),
+    "d": thrust(DoF.YAW, 1),
     "z": thrust(DoF.HEAVE, 1),
     "x": thrust(DoF.HEAVE, -1),
     "q": thrust(DoF.SWAY, 1),
@@ -195,11 +202,15 @@ def data():
     )
 
     rospy.Subscriber(
-        f"/{DATA_SOURCE}/angular_velocity", Vector3, lambda x: set("Angular Velocity", (x.x, x.y, x.z))
+        f"/{DATA_SOURCE}/angular_velocity",
+        Vector3,
+        lambda x: set("Angular Velocity", (x.x, x.y, x.z)),
     )
 
     rospy.Subscriber(
-        f"/{DATA_SOURCE}/magnetic_field", Vector3, lambda x: set("Magnetic Field", (x.x, x.y, x.z))
+        f"/{DATA_SOURCE}/magnetic_field",
+        Vector3,
+        lambda x: set("Magnetic Field", (x.x, x.y, x.z)),
     )
 
     def orientation(x):
@@ -209,6 +220,9 @@ def data():
         set("Roll", x.x)
         set("Pitch", x.y)
         set("Yaw", x.z)
+
+        global YAW_TARGET
+        YAW_TARGET = x.z
 
     rospy.Subscriber(f"/{DATA_SOURCE}/orientation", Vector3, orientation)
 
