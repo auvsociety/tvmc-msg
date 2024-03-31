@@ -17,13 +17,17 @@ from tvmc import MotionController, DoF, ControlMode
 # globals
 CURRENT_YAW = 0
 START_YAW = 0
+REVERSE_YAW = -1
+DATA_SOURCE = "sensors"
+IMAGE_ROSTOPIC ="/oak/rgb/image_raw"
 
-H_FOV = 71.4
+# H_FOV = 72.14
+H_FOV = 62.14
 
 HEAVE_KP = -170
 HEAVE_KI = -10
 HEAVE_KD = -60
-HEAVE_TARGET = 0.8
+HEAVE_TARGET = 1.2
 HEAVE_ACCEPTABLE_ERROR = 0.025
 HEAVE_OFFSET = 8
 
@@ -40,6 +44,7 @@ ROLL_TARGET = 0
 ROLL_ACCEPTABLE_ERROR = 1.5
 
 YAW_KP = 0.86
+# YAW_KP = 1.6
 YAW_KI = 0
 YAW_KD = 0.3
 YAW_TARGET = 45
@@ -205,6 +210,7 @@ def detect_gate(image):
 
     image = cv2.resize(image, (640, 360))
     image = cv2.GaussianBlur(image, (3, 3), 1)
+    hls = cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     gray = clahe.apply(gray)
@@ -299,7 +305,8 @@ def detect_gate(image):
         line = clustered_lines.pop()
 
         for other_line in clustered_lines:
-            if abs(line.bottom() - other_line.bottom()) < 25:
+            if abs(line.y_pos() - other_line.y_pos()) < 100:
+            # if abs(line.bottom() - other_line.bottom()) < 25:
                 gate = np.mean(
                     [
                         [line.x_pos(), other_line.x_pos()],
@@ -403,9 +410,10 @@ class QualificationTask(StateMachine):
         self.gate_visible = False
 
         self.correction_thread = None
-        self.singe_pole_warning = False
+        self.single_pole_warning = False
         self.FOV_exceeded = 0
         self.blind_timer = None
+        self.correcting = False
 
         super(QualificationTask, self).__init__()
 
@@ -432,11 +440,11 @@ class QualificationTask(StateMachine):
 
         self.m.set_current_point(DoF.YAW, vec.z)
 
+        # print(f"\rYaw: {self.current_yaw}, Lock: {self.yaw_lock}", end='')
+
     def on_enter_initializing_camera(self):
         print("Initializing Sensors.")
-        self.image_sub = rospy.Subscriber(
-            "/emulation/camera/front/image_color", Image, self.on_image
-        )
+        self.image_sub = rospy.Subscriber(IMAGE_ROSTOPIC, Image, self.on_image)
         print("Camera done.")
 
         self.fix_yaw()
@@ -445,7 +453,7 @@ class QualificationTask(StateMachine):
         print("Attempting to fix yaw.")
         self.m.set_pid_constants(DoF.YAW, YAW_KP, YAW_KI, YAW_KD, YAW_ACCEPTABLE_ERROR)
         self.orientation_sub = rospy.Subscriber(
-            "/emulation/orientation", Vector3, self.on_orientation
+            f"/{DATA_SOURCE}/orientation", Vector3, self.on_orientation
         )
 
         while not self.yaw_lock:
@@ -470,7 +478,7 @@ class QualificationTask(StateMachine):
         )
         self.m.set_pid_limits(DoF.HEAVE, -10, 10, -25, 25)
         self.m.set_target_point(DoF.HEAVE, HEAVE_TARGET)
-        self.depth_sub = rospy.Subscriber("/emulation/depth", Float32, self.on_depth)
+        self.depth_sub = rospy.Subscriber(f"/{DATA_SOURCE}/depth", Float32, self.on_depth)
         self.m.set_control_mode(DoF.HEAVE, ControlMode.CLOSED_LOOP)
 
         while (
@@ -539,23 +547,29 @@ class QualificationTask(StateMachine):
         self.set_yaw(self.current_yaw + 180 % 180)
 
     def correct_towards_gate_async(self):
-        self.set_yaw(self.correction_required())
+        self.correcting = True
+        self.set_yaw((self.correction_required() + self.current_yaw) / 2)
 
         time_slept = 0
+        # direction = 'left' if self.correction_required() < self.current_yaw else 'right'
+        # self.m.set_thrust(DoF.SWAY, 25 * (1 if direction == 'left' else -1))
 
-        while self.correction_required() and time_slept < 1:
-            time.sleep(0.1)
-            time_slept += 1
-            self.set_yaw(self.correction_required())
+        while self.correction_required() and time_slept < 2:
+            time.sleep(0.5)
+            time_slept += 0.5
+            # self.set_yaw(self.correction_required())
 
+        # self.m.set_thrust(DoF.SWAY, 0)
         self.correction_thread = None
+        self.correcting = False
         self.surge()
+
 
     def on_enter_correcting_for_gate(self):
         print("Attempting to correcting heading towards gate.")
-        # if not self.correction_thread:
-        #     self.correction_thread = threading.Thread(target=self.correct_towards_gate_async, daemon=True)
-        #     self.correction_thread.start()
+        if not self.correction_thread:
+            self.correction_thread = threading.Thread(target=self.correct_towards_gate_async, daemon=True)
+            self.correction_thread.start()
 
     # def on_correct_for_gate(self):
     #     new_heading = (self.current_yaw + self.correction_required()) * 10
@@ -564,31 +578,40 @@ class QualificationTask(StateMachine):
 
     def correction_required(self):
         gate = memories.best_recall()
-
+        
+        if not gate:
+            return False
+        
         x_pos = gate.x
 
         deviation = x_pos - FRAME_WIDTH / 2
         yaw_required = deviation / FRAME_WIDTH * H_FOV
 
         if abs(yaw_required) > GATE_ACCEPTABLE_ERROR:
-            return yaw_required + self.current_yaw
+            return REVERSE_YAW * yaw_required + self.current_yaw
 
         return False
 
     def preventive_measures(self):
-        if len(clustered_lines) > 0 and not self.singe_pole_warning:
-            print("detected sole line")
-            if not self.singe_pole_warning:
+        if len(clustered_lines) > 0 and not self.single_pole_warning:
+
+            if not self.single_pole_warning:
                 print("Detected sole line. Turning towards pole.")
-                self.singe_pole_warning = True
+                self.single_pole_warning = True
 
             x_pos = clustered_lines[0].x_pos()
+
+            if len(clustered_lines) > 1:
+                x_pos /= 2
+                x_pos += clustered_lines[1].x_pos()
 
             deviation = x_pos - FRAME_WIDTH / 2
             yaw_required = deviation / FRAME_WIDTH * H_FOV
 
             if abs(yaw_required) > GATE_ACCEPTABLE_ERROR:
-                self.set_yaw(yaw_required + self.current_yaw)
+                self.set_yaw(REVERSE_YAW * yaw_required + self.current_yaw)
+                # self.m.set_thrust(DoF.SURGE, 10)
+                # self.m.set_control_mode(DoF.PITCH, ControlMode.OPEN_LOOP)
 
     def check_FOV_exceeded(self):
         gate = memories.best_recall()
@@ -614,14 +637,16 @@ class QualificationTask(StateMachine):
             self.check_FOV_exceeded()
 
             if self.correction_required():
-                self.set_yaw(self.correction_required())
+                # self.set_yaw(self.correction_required())
                 self.correct_for_gate()
-            else:
+            elif not self.correcting:
                 self.surge()
         else:
             self.preventive_measures()
             self.gate_visible = False
-            self.surge()
+            
+            if not self.correcting:
+                self.surge()
 
 
 if __name__ == "__main__":
