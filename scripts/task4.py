@@ -10,16 +10,16 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Float32
 from geometry_msgs.msg import Vector3
 from statemachine import StateMachine, State
-# from statemachine.contrib.diagram import DotGraphMachine
 import numpy as np
 from tvmc import MotionController, DoF, ControlMode
+from statemachine.contrib.diagram import DotGraphMachine
 
 
 # globals
 CURRENT_YAW = 0
 START_YAW = 0
 REVERSE_YAW = -1
-DATA_SOURCE = "sensors"
+DATA_SOURCE = "emulation"
 IMAGE_ROSTOPIC ="/oak/rgb/image_raw"
 
 # H_FOV = 72.14
@@ -55,6 +55,7 @@ YAW_ACCEPTABLE_ERROR = 1.5
 FRAME_WIDTH = 640
 GATE_ACCEPTABLE_ERROR = 5
 
+SWAY_THRUST = 50
 
 def predict_depth(line1, line2):
     fov_w, fov_h = 62 * math.pi / 180, 46 * math.pi / 180
@@ -78,10 +79,7 @@ def predict_depth(line1, line2):
     depth = H / (2 * math.tan(fov_h / 2))
     # print(depth)
     return depth
-
-
 clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-
 
 class Line:
     def __init__(self, x1, y1, x2, y2) -> None:
@@ -201,17 +199,15 @@ class Memories:
 
         return None
 
-
 memories = Memories()
 clustered_lines = []
-
 
 def detect_gate(image):
     global clustered_lines
 
     image = cv2.resize(image, (640, 360))
     image = cv2.GaussianBlur(image, (3, 3), 1)
-    hls = cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
+    # hls = cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     gray = clahe.apply(gray)
@@ -329,8 +325,6 @@ def detect_gate(image):
 
     cv2.imshow("image", image)
     cv2.waitKey(1)
-
-
 def set_yaw(angle):
     pass
 
@@ -343,56 +337,242 @@ def surge(thrust):
     pass
 
 
-class QualificationTask(StateMachine):
-    wait_to_start = State(initial=True)
+class FlareTask(StateMachine):
+    # initializing_camera = State()
+    # fixing_yaw = State()
+    # heaving_down = State()
+    # surging_forward = State()
 
-    initializing_camera = State()
-
-    fixing_yaw = State()
-    heaving_down = State()
-
-    surging_forward = State()
-
-    correcting_for_gate = State()
-    surging_towards_gate = State()
-
-    blind_surge = State()
+    gatePass = State(initial=True)
+    aboutTurn = State()
+    swaySide = State()
+    scanApril = State()
+    centerApril = State()
+    turn45 = State()
+    turn90 = State()
+    turn135 = State()
+    swaySearchFlare = State()
+    hitVisible1 = State()
+    hitVisible2 = State()
+    hitVisible3 = State()
+    # flareCorrection = State()
+    # surging = State()
     finished = State(final=True)
 
-    start_task = wait_to_start.to(initializing_camera)
-    fix_yaw = initializing_camera.to(fixing_yaw)
-    heave_down = fixing_yaw.to(heaving_down)
-    surge_forward = heaving_down.to(surging_forward)
-
-    correct_for_gate = (
-        correcting_for_gate.to(correcting_for_gate, internal=True)
-        | surging_forward.to(correcting_for_gate)
-        | surging_towards_gate.to(correcting_for_gate)
-    )
-
-    # surge_towards_gate = (
-    #     surging_towards_gate.to(surging_towards_gate, internal=True)
-    #     | correcting_for_gate.to(surging_towards_gate)
-    #     | surging_forward.to(surging_towards_gate)
-    # )
-
+    begin = gatePass.to(aboutTurn)
+    startSway = aboutTurn.to(swaySide)
+    recheck = swaySearchFlare.to(turn45)
+    startFlareCheck = centerApril.to(turn45)
+    # finish = gatePass.to(finished)
     proceed = (
-        surging_forward.to(blind_surge, cond="gate_about_to_pass")
-        | surging_towards_gate.to(blind_surge, cond="gate_about_to_pass")
-        | blind_surge.to(blind_surge, cond="gate_about_to_pass", internal=True)
-        | correcting_for_gate.to(surging_towards_gate, cond="gate_visible")
-        | correcting_for_gate.to(surging_forward, unless="gate_visible")
-        | surging_towards_gate.to(
-            surging_towards_gate, cond="gate_visible", internal=True
-        )
-        | surging_towards_gate.to(surging_forward, unless="gate_visible")
-        | surging_forward.to(surging_towards_gate, cond="gate_visible")
-        | surging_forward.to(surging_forward, unless="gate_visible", internal=True)
+        swaySide.to(scanApril,cond="detectedApril")
+        | swaySide.to(swaySide,unless="detectedApril",internal=True)
+        | scanApril.to(centerApril,cond="readApril")
+        | scanApril.to(scanApril,unless="readApril")
+        | turn45.to(turn90, cond="turn1")
+        | turn90.to(turn135,cond="turn2")
+        | turn135.to(hitVisible1,unless="moreToFind")
+        | turn135.to(swaySearchFlare,cond="swayToSearchCondn")
+        | turn135.to(hitVisible2,cond = "foundTwo")
+        | turn135.to(hitVisible3,cond = "foundOne")
+        | hitVisible1.to(hitVisible2,cond="hit1")
+        | hitVisible2.to(hitVisible3,cond="hit2")
+        | hitVisible3.to(finished,cond="hit3")
+
     )
 
-    # blindly_surge = surging_towards_gate.to(blind_surge)
+    def on_enter_gatePass(self):
+        # Init state
+        print("Task 4 sequence initiated")
+        time.sleep(1) #let bot relax
+        print("Initializing Sensors.")
+        self.image_sub = rospy.Subscriber(IMAGE_ROSTOPIC, Image, self.on_image)
+        print("Camera done.")
+        self.m.set_pid_constants(DoF.YAW, YAW_KP, YAW_KI, YAW_KD, YAW_ACCEPTABLE_ERROR)
+        self.orientation_sub = rospy.Subscriber(
+            f"/{DATA_SOURCE}/orientation", Vector3, self.on_orientation
+        )
+        self.begin() #initiate sequence
 
-    finish = blind_surge.to(finished)
+    def on_enter_aboutTurn(self):
+        print("ABOUT TURN TIMEE")
+        self.m.set_pid_constants(DoF.YAW, YAW_KP, YAW_KI, YAW_KD, YAW_ACCEPTABLE_ERROR)
+        self.orientation_sub = rospy.Subscriber(
+            f"/{DATA_SOURCE}/orientation", Vector3, self.on_orientation
+        )
+        while self.yaw_lock is None:
+            time.sleep(0.1)
+        self.set_yaw(self.current_yaw + 180)
+        global YAW_TARGET
+        YAW_TARGET = self.current_yaw+180
+        self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
+        while (
+            self.current_yaw is None
+            or abs(self.current_yaw - YAW_TARGET) > YAW_ACCEPTABLE_ERROR * 3
+        ):
+            time.sleep(0.1)
+        print("Rotated 180")
+        self.startSway()
+    
+    def on_enter_swaySide(self):
+        global SWAY_THRUST
+        self.m.set_control_mode(DoF.SWAY,ControlMode.OPEN_LOOP)
+        self.m.set_thrust(DoF.SWAY,SWAY_THRUST)
+        #Wait for April tag to be detected, set the variable when it is detected
+        while (not self.detectedApril):
+            time.sleep(0.1)
+        
+    
+    def on_exit_swaySide(self):
+        self.m.set_thrust(DoF.SWAY,0)
+
+    def on_enter_scanApril(self):
+        print("April tag detected, reading it")
+        #TODO Read APRIL TAG
+        print("April Tag read")
+        ...
+     
+    def on_exit_scanApril(self):
+        ...
+
+    def on_enter_centerApril(self):
+        global SWAY_THRUST
+        self.m.control_mode(DoF.SWAY,ControlMode.OPEN_LOOP)
+        self.m.set_thrust(DoF.SWAY,SWAY_THRUST)
+        while(not self.centeredApril):
+            time.sleep(0.1)
+        self.startFlareCheck()
+        ...
+    
+    def on_exit_centerApril(self):
+        self.m.set_thrust(DoF.SWAY,0)
+        ...
+    
+    def on_enter_turn45(self):
+        print("45 degree scan turn")
+        self.m.set_pid_constants(DoF.YAW, YAW_KP, YAW_KI, YAW_KD, YAW_ACCEPTABLE_ERROR)
+        self.orientation_sub = rospy.Subscriber(
+            f"/{DATA_SOURCE}/orientation", Vector3, self.on_orientation
+        )
+        while self.yaw_lock is None:
+            time.sleep(0.1)
+        global YAW_TARGET
+        self.set_yaw(YAW_TARGET - 135)
+        self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
+        while (
+            self.current_yaw is None
+            or abs(self.current_yaw - YAW_TARGET) > YAW_ACCEPTABLE_ERROR * 3
+        ):
+            time.sleep(0.1)
+        print("Scan 1 turn done")
+        self.turn1 = True
+    
+    def on_enter_turn90(self):
+        print("90 Degree scan turn")
+        global YAW_TARGET
+        
+        self.set_yaw(YAW_TARGET-180)
+        while (
+            self.current_yaw is None 
+            or abs(self.current_yaw - YAW_TARGET) > YAW_ACCEPTABLE_ERROR * 3
+        ):
+            time.sleep(0.1)
+        self.turn2=True
+    def on_enter_turn135(self):
+        print("90 Degree scan turn")
+        global YAW_TARGET
+        
+        self.set_yaw(YAW_TARGET-180-45)
+        while (
+            self.current_yaw is None 
+            or abs(self.current_yaw - YAW_TARGET) > YAW_ACCEPTABLE_ERROR * 3
+        ):
+            time.sleep(0.1)
+        self.turn3=True
+    def swayable(self):
+        # returns true if we didnt sway search already
+        return self.swayCount == 0 
+    def moreToFind(self):
+        #Will return true if we didnt find 3 flares
+        return not self.flareCount == 3
+    def swayToSearchCondn(self):
+        # Sway to search if we didnt sway already and we didnt find 3 flares
+        return self.moreToFind() and self.swayable()
+    def foundOne(self):
+        # condition for when we found only one flare even after alot of bs (swaying)
+        return (not self.swayable()) and self.flareCount == 1
+    def foundTwo(self):
+        # condition for when we found only one flare even after alot of bs (swaying)
+        return (not self.swayable()) and self.flareCount == 2
+
+
+    def on_enter_swaySearchSway(self):
+        global SWAY_THRUST
+        self.m.control_mode(DoF.SWAY,ControlMode.OPEN_LOOP)
+        self.m.set_thrust(DoF.SWAY,SWAY_THRUST)
+        self.timer = threading.Thread(target=self.blind_timer_async,daemon=True)
+    def on_exit_swaySearchSway(self):
+        self.m.set_thrust(DoF.SWAY,0)
+        self.swayCount +=  1
+    
+    # def on_enter_surging(self):
+    #     print("Surging forward to flare.")
+    #     self.enable_pitch_pid()
+    #     self.m.set_thrust(DoF.SURGE, 40)
+
+    # def on_exit_surging(self):
+    #     print("Stopping Surge")
+    #     self.disable_pitch_pid()
+    #     self.m.set_thrust(DoF.SURGE, 0)
+
+    
+    def correct_towards_flare_async(self):
+        self.correcting = True
+        self.set_yaw((self.correction_required() + self.current_yaw) / 2)
+
+        time_slept = 0
+        # direction = 'left' if self.correction_required() < self.current_yaw else 'right'
+        # self.m.set_thrust(DoF.SWAY, 25 * (1 if direction == 'left' else -1))
+        # CHANGE self.correction_required() function
+        while self.correction_required() and time_slept < 0.5:
+            time.sleep(0.1)
+            time_slept += 0.1
+            # self.set_yaw(self.correction_required())
+
+        # self.m.set_thrust(DoF.SWAY, 0)
+        self.correction_thread = None
+        self.correcting = False
+        self.proceed()
+
+
+    # def on_enter_flareCorrection(self):
+    #     print("Attempting to correcting heading towards gate.")
+    #     # self.set_yaw((self.correction_required() + self.current_yaw) / 2)
+
+    #     if not self.correction_thread:
+    #         self.correction_thread = threading.Thread(target=self.correct_towards_flare_async, daemon=True)
+    #         self.correction_thread.start()
+
+
+    def on_enter_hitVisible1(self):
+
+        self.hit1 = True
+        ...
+    def on_enter_hitVisible1(self):
+
+        self.hit2 = True
+        ...
+    def on_enter_hitVisible1(self):
+
+        self.hit3=  True
+        ...
+
+    
+
+    def blind_timer_async(self):
+        time.sleep(2)
+        self.swayCount += 1
+        self.recheck()
 
     def __init__(self):
         self.m = MotionController()
@@ -416,14 +596,25 @@ class QualificationTask(StateMachine):
         self.blind_timer = None
         self.correcting = False
 
-        super(QualificationTask, self).__init__()
+        self.detectedApril = False
+        self.readApril = False 
+        self.swayDir = 0 
+        self.centeredApril = False
 
-    def on_enter_wait_to_start(self):
-        # wait for some time for everything to be fine
-        self.m.start()
-        print("Waiting to start.")
-        time.sleep(3)
-        self.start_task()
+        self.turn1 = False
+        self.turn2 = False
+        self.turn3 = False
+        self.flareCount = 0
+        self.swayCount = 0
+        self.flareCentered = False
+        self.hitCount = 0
+        self.hit1 = False
+        self.hit2 = False
+        self.hit3 = False
+        # Direction to sway to center April Tag, 1 for left, -1 for right, set after getting angle from CV 
+        super(FlareTask, self).__init__()
+
+
 
     def on_depth(self, depth: Float32):
         self.current_depth = depth.data
@@ -436,62 +627,17 @@ class QualificationTask(StateMachine):
     def on_orientation(self, vec: Vector3):
         self.current_yaw = vec.z
 
-        if self.yaw_lock is None:
+        if not self.yaw_lock:
             self.yaw_lock = vec.z
 
         self.m.set_current_point(DoF.YAW, vec.z)
 
         # print(f"\rYaw: {self.current_yaw}, Lock: {self.yaw_lock}", end='')
 
-    def on_enter_initializing_camera(self):
-        print("Initializing Sensors.")
-        self.image_sub = rospy.Subscriber(IMAGE_ROSTOPIC, Image, self.on_image)
-        print("Camera done.")
 
-        self.fix_yaw()
 
-    def on_enter_fixing_yaw(self):
-        print("Attempting to fix yaw.")
-        self.m.set_pid_constants(DoF.YAW, YAW_KP, YAW_KI, YAW_KD, YAW_ACCEPTABLE_ERROR)
-        self.orientation_sub = rospy.Subscriber(
-            f"/{DATA_SOURCE}/orientation", Vector3, self.on_orientation
-        )
 
-        while self.yaw_lock is None:
-            time.sleep(0.1)
 
-        self.set_yaw(self.yaw_lock)
-        self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
-        print("Orientation done. Locked Yaw.")
-
-        self.heave_down()
-
-    def on_enter_heaving_down(self):
-        print("Attempting to maintain depth.")
-
-        self.m.set_pid_constants(
-            DoF.HEAVE,
-            HEAVE_KP,
-            HEAVE_KI,
-            HEAVE_KD,
-            HEAVE_ACCEPTABLE_ERROR,
-            HEAVE_OFFSET,
-        )
-        self.m.set_pid_limits(DoF.HEAVE, -10, 10, -25, 25)
-        self.m.set_target_point(DoF.HEAVE, HEAVE_TARGET)
-        self.depth_sub = rospy.Subscriber(f"/{DATA_SOURCE}/depth", Float32, self.on_depth)
-        self.m.set_control_mode(DoF.HEAVE, ControlMode.CLOSED_LOOP)
-
-        while (
-            self.current_depth is None
-            or abs(self.current_depth - HEAVE_TARGET) > HEAVE_ACCEPTABLE_ERROR * 3
-        ):
-            time.sleep(0.1)
-
-        print("Heave done. Locked Depth.")
-
-        self.camera_ready = True
-        self.surge_forward()
 
     def enable_pitch_pid(self):
         self.m.set_pid_constants(
@@ -504,75 +650,15 @@ class QualificationTask(StateMachine):
     def disable_pitch_pid(self):
         self.m.set_control_mode(DoF.PITCH, ControlMode.OPEN_LOOP)
 
-    def on_enter_surging_forward(self):
-        print("Surging forward, looking for gate.")
-        self.enable_pitch_pid()
-        self.m.set_thrust(DoF.SURGE, 40)
 
-    def on_exit_surging_forward(self):
-        print("Stopping Surge.")
-        self.disable_pitch_pid()
-        self.m.set_thrust(DoF.SURGE, 0)
-
-    def on_enter_surging_towards_gate(self):
-        print("Surging towards gate.")
-        self.enable_pitch_pid()
-        self.m.set_thrust(DoF.SURGE, 30)
-
-    def on_exit_surging_towards_gate(self):
-        # print("Gate out of view.")
-        self.disable_pitch_pid()
-        self.m.set_thrust(DoF.SURGE, 0)
-
-    def blind_timer_async(self):
-        time.sleep(10)
-        self.finish()
-
-    def on_enter_blind_surge(self):
-        print("About to pass through gate, going blind.")
-        self.enable_pitch_pid()
-        self.m.set_thrust(DoF.SURGE, 60)
-
-        if not self.blind_timer:
-            self.blind_timer = threading.Thread(target=self.blind_timer_async, daemon=True)
-            self.blind_timer.start()
-
-    def on_exit_blind_surge(self):
-        print("Stopping Surge.")
-        self.disable_pitch_pid()
-        self.m.set_thrust(DoF.SURGE, 0)
     
     def on_enter_finished(self):
         print("Qualified.")
         self.m.set_target_point(DoF.HEAVE, 0)
         self.set_yaw(self.current_yaw + 180 % 180)
 
-    def correct_towards_gate_async(self):
-        self.correcting = True
-        self.set_yaw((self.correction_required() + self.current_yaw) / 2)
-
-        time_slept = 0
-        # direction = 'left' if self.correction_required() < self.current_yaw else 'right'
-        # self.m.set_thrust(DoF.SWAY, 25 * (1 if direction == 'left' else -1))
-
-        while self.correction_required() and time_slept < 0.5:
-            time.sleep(0.1)
-            time_slept += 0.1
-            # self.set_yaw(self.correction_required())
-
-        # self.m.set_thrust(DoF.SWAY, 0)
-        self.correction_thread = None
-        self.correcting = False
-        self.proceed()
 
 
-    def on_enter_correcting_for_gate(self):
-        print("Attempting to correcting heading towards gate.")
-        # self.set_yaw((self.correction_required() + self.current_yaw) / 2)
-
-        if not self.correction_thread:
-            self.correction_thread = threading.Thread(target=self.correct_towards_gate_async, daemon=True)
-            self.correction_thread.start()
 
     # def on_correct_for_gate(self):
     #     new_heading = (self.current_yaw + self.correction_required()) * 10
@@ -595,39 +681,7 @@ class QualificationTask(StateMachine):
 
         return False
 
-    def preventive_measures(self):
-        if len(clustered_lines) > 0 and not self.single_pole_warning:
-
-            if not self.single_pole_warning:
-                print("Detected sole line. Turning towards pole.")
-                self.single_pole_warning = True
-
-            x_pos = clustered_lines[0].x_pos()
-
-            if len(clustered_lines) > 1:
-                x_pos /= 2
-                x_pos += clustered_lines[1].x_pos()
-
-            deviation = x_pos - FRAME_WIDTH / 2
-            yaw_required = deviation / FRAME_WIDTH * H_FOV
-
-            if abs(yaw_required) > GATE_ACCEPTABLE_ERROR:
-                self.set_yaw(REVERSE_YAW * yaw_required + self.current_yaw)
-                # self.m.set_thrust(DoF.SURGE, 10)
-                # self.m.set_control_mode(DoF.PITCH, ControlMode.OPEN_LOOP)
-
-    def check_FOV_exceeded(self):
-        gate = memories.best_recall()
-
-        if not (gate.line_x1 and gate.line_x2):
-            return
-
-        if gate.line_x1 < FRAME_WIDTH * 0.2 and gate.line_x2 > FRAME_WIDTH * 0.8:
-            self.FOV_exceeded += 1
-
-    def gate_about_to_pass(self):
-        return self.FOV_exceeded > 20
-
+    
     def on_image(self, image):
         image = self.bridge.imgmsg_to_cv2(image, "bgr8")
         detect_gate(image)
@@ -643,20 +697,18 @@ class QualificationTask(StateMachine):
                 # self.set_yaw(self.correction_required())
                 self.correct_for_gate()
             elif not self.correcting:
-                self.proceed()
+                self.surge()
         else:
             self.preventive_measures()
             self.gate_visible = False
             
             if not self.correcting:
-                self.proceed()
-
-
+                self.surge()
 if __name__ == "__main__":
-    rospy.init_node("Node")
-    task = QualificationTask()
+    # rospy.init_node("Node")
+    # task = FlareTask()
     
-    # graph = DotGraphMachine(QualificationTask)()
-    # graph.write_png("./qualify.png")
+    graph = DotGraphMachine(FlareTask)()
+    graph.write_png("/home/sushi/flare.png")
     
-    rospy.spin()
+    # rospy.spin()
