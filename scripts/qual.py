@@ -10,7 +10,6 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Float32
 from geometry_msgs.msg import Vector3
 from statemachine import StateMachine, State
-# from statemachine.contrib.diagram import DotGraphMachine
 import numpy as np
 from tvmc import MotionController, DoF, ControlMode
 
@@ -21,14 +20,17 @@ START_YAW = 0
 REVERSE_YAW = -1
 DATA_SOURCE = "sensors"
 IMAGE_ROSTOPIC ="/oak/rgb/image_raw"
+MIN_LINE_LENGTH = 80
 
 # H_FOV = 72.14
 H_FOV = 62.14
+H_FOV_CENTER = 31
+# H_FOV = 55
 
 HEAVE_KP = -170
 HEAVE_KI = -10
 HEAVE_KD = -60
-HEAVE_TARGET = 1.2
+HEAVE_TARGET = 0.7
 HEAVE_ACCEPTABLE_ERROR = 0.025
 HEAVE_OFFSET = 8
 
@@ -44,15 +46,15 @@ ROLL_KD = 0.4
 ROLL_TARGET = 0
 ROLL_ACCEPTABLE_ERROR = 1.5
 
-YAW_KP = 0.86
-# YAW_KP = 1.6
-YAW_KI = 0
-YAW_KD = 0.3
+# YAW_KP = 0.86
+YAW_KP = 1.5
+YAW_KI = 0.05
+YAW_KD = 0.5
 YAW_TARGET = 45
 YAW_ACCEPTABLE_ERROR = 1.5
 
 
-FRAME_WIDTH = 640
+FRAME_WIDTH = 320
 GATE_ACCEPTABLE_ERROR = 5
 
 
@@ -204,131 +206,138 @@ class Memories:
 
 memories = Memories()
 clustered_lines = []
+latest_image = None
+done_processing = True
 
 
-def detect_gate(image):
-    global clustered_lines
+    # def detect_gate(image):
+    #     global clustered_lines, done_processing
 
-    image = cv2.resize(image, (640, 360))
-    image = cv2.GaussianBlur(image, (3, 3), 1)
-    hls = cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    #     image = latest_image
+    #     done_processing = True
+    #     image = cv2.resize(image, (320, 180))
+    #     image = cv2.GaussianBlur(image, (3, 3), 1)
+    #     hls = cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
+    #     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    gray = clahe.apply(gray)
+    #     gray = clahe.apply(gray)
 
-    mask = cv2.adaptiveThreshold(
-        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 2
-    )
+    #     mask = cv2.adaptiveThreshold(
+    #         gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 2
+    #     )
 
-    kernel = np.ones((3, 3), np.uint8)
-    opening = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-    opening = 255 - opening
-    opening = cv2.erode(opening, None, iterations=1)
+    #     kernel = np.ones((3, 3), np.uint8)
+    #     opening = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    #     opening = 255 - opening
+    #     opening = cv2.erode(opening, None, iterations=1)
 
-    # canny = cv2.Canny(
-    #     cv2.GaussianBlur(clahe.apply(gray), (11, 11), 0),
-    #     300,
-    #     700,
-    #     apertureSize=5,
-    # )
+    #     # canny = cv2.Canny(
+    #     #     cv2.GaussianBlur(clahe.apply(gray), (11, 11), 0),
+    #     #     300,
+    #     #     700,
+    #     #     apertureSize=5,
+    #     # )
 
-    # canny = cv2.dilate(canny, None, iterations=1)
-    # cv2.imshow("canny", canny)
+    #     # canny = cv2.dilate(canny, None, iterations=1)
+    #     # cv2.imshow("canny", canny)
 
-    cv2.imshow("opening", opening)
+    #     cv2.imshow("opening", opening)
 
-    minLineLength = 50
-    lines = cv2.HoughLinesP(
-        image=opening,
-        rho=1,
-        theta=np.pi / 180,
-        threshold=80,
-        lines=np.array([]),
-        minLineLength=minLineLength,
-        maxLineGap=5,
-    )
+    #     minLineLength = 50
+    #     lines = cv2.HoughLinesP(
+    #         image=opening,
+    #         rho=1,
+    #         theta=np.pi / 180,
+    #         threshold=80,
+    #         lines=np.array([]),
+    #         minLineLength=minLineLength,
+    #         maxLineGap=5,
+    #     )
 
-    vertical_lines = []
+    #     vertical_lines = []
 
-    if lines is not None:
-        for line in lines:
-            line = Line(*line[0])
+    #     if lines is not None:
+    #         for line in lines:
+    #             line = Line(*line[0])
 
-            # print(theta)
-            angle_threshold = 20
+    #             # print(theta)
+    #             angle_threshold = 20
 
-            if abs(90 - line.angle()) <= angle_threshold:
-                cv2.line(
-                    image,
-                    (line.x1, line.y1),
-                    (line.x2, line.y2),
-                    (0, 255, 0),
-                    3,
-                    cv2.LINE_AA,
-                )
-                vertical_lines.append(line)
+    #             if abs(90 - line.angle()) <= angle_threshold:
+    #                 cv2.line(
+    #                     image,
+    #                     (line.x1, line.y1),
+    #                     (line.x2, line.y2),
+    #                     (0, 255, 0),
+    #                     3,
+    #                     cv2.LINE_AA,
+    #                 )
+    #                 vertical_lines.append(line)
 
-    # bunch lines together based on x position
-    vertical_lines.sort(key=lambda x: x.x_pos())
+    #     # bunch lines together based on x position
+    #     vertical_lines.sort(key=lambda x: x.x_pos())
 
-    # cluster lines
-    clusters = []
-    cluster = []
+    #     # cluster lines
+    #     clusters = []
+    #     cluster = []
 
-    for i in range(len(vertical_lines) - 1):
-        cluster.append(vertical_lines[i])
-        if vertical_lines[i + 1].x_pos() - vertical_lines[i].x_pos() > 20:
-            clusters.append(cluster)
-            cluster = []
+    #     for i in range(len(vertical_lines) - 1):
+    #         cluster.append(vertical_lines[i])
+    #         if vertical_lines[i + 1].x_pos() - vertical_lines[i].x_pos() > 20:
+    #             clusters.append(cluster)
+    #             cluster = []
 
-    if cluster:
-        clusters.append(cluster)
+    #     if cluster:
+    #         clusters.append(cluster)
 
-    clustered_lines = []
+    #     clustered_lines = []
 
-    for cluster in filter(lambda x: len(x) > 1, clusters):
-        ys = [x.y1 for x in cluster] + [x.y2 for x in cluster]
-        y1 = min(ys)
-        y2 = max(ys)
+    #     for cluster in filter(lambda x: len(x) > 1, clusters):
+    #         ys = [x.y1 for x in cluster] + [x.y2 for x in cluster]
+    #         y1 = min(ys)
+    #         y2 = max(ys)
 
-        x = int(np.mean([x.x_pos() for x in cluster]))
-        cv2.line(image, (x, y1), (x, y2), (0, 0, 255), 3, cv2.LINE_AA)
-        clustered_line = Line(x, y1, x, y2)
+    #         x = int(np.mean([x.x_pos() for x in cluster]))
+    #         cv2.line(image, (x, y1), (x, y2), (0, 0, 255), 3, cv2.LINE_AA)
+    #         clustered_line = Line(x, y1, x, y2)
 
-        if clustered_line.length() > 50:
-            clustered_lines.append(clustered_line)
+    #         if clustered_line.length() > 50:
+    #             clustered_lines.append(clustered_line)
 
-    memories.run_frame()
+    #     memories.run_frame()
 
-    clustered_lines_copy = clustered_lines[:]
+    #     clustered_lines_copy = clustered_lines[:]
 
-    while clustered_lines:
-        line = clustered_lines.pop()
+    #     while clustered_lines:
+    #         line = clustered_lines.pop()
 
-        for other_line in clustered_lines:
-            if abs(line.y_pos() - other_line.y_pos()) < 100:
-            # if abs(line.bottom() - other_line.bottom()) < 25:
-                gate = np.mean(
-                    [
-                        [line.x_pos(), other_line.x_pos()],
-                        [line.y_pos(), other_line.y_pos()],
-                    ],
-                    axis=1,
-                )
-                memories.remember(
-                    gate[0],
-                    gate[1],
-                    min(line.x_pos(), other_line.x_pos()),
-                    max(line.x_pos(), other_line.x_pos()),
-                )
-    
-    clustered_lines = clustered_lines_copy
+    #         for other_line in clustered_lines:
+    #             if abs(line.y_pos() - other_line.y_pos()) < 100:
+    #             # if abs(line.bottom() - other_line.bottom()) < 25:
+    #                 gate = np.mean(
+    #                     [
+    #                         [line.x_pos(), other_line.x_pos()],
+    #                         [line.y_pos(), other_line.y_pos()],
+    #                     ],
+    #                     axis=1,
+    #                 )
+    #                 memories.remember(
+    #                     gate[0],
+    #                     gate[1],
+    #                     min(line.x_pos(), other_line.x_pos()),
+    #                     max(line.x_pos(), other_line.x_pos()),
+    #                 )
+        
+    #     clustered_lines = clustered_lines_copy
 
-    for gate in memories.recall():
-        cv2.circle(image, tuple(int(x) for x in gate), 10, (0, 255, 255), -1)
+    #     for gate in memories.recall():
+    #         cv2.circle(image, tuple(int(x) for x in gate), 10, (0, 255, 255), -1)
 
-    cv2.imshow("image", image)
-    cv2.waitKey(1)
+    #     cv2.imshow("image", image)
+    #     cv2.waitKey(1)
+
+    #     if not done_processing:
+    #         detect_gate()
 
 
 def set_yaw(angle):
@@ -370,13 +379,13 @@ class QualificationTask(StateMachine):
         | surging_towards_gate.to(correcting_for_gate)
     )
 
-    # surge_towards_gate = (
-    #     surging_towards_gate.to(surging_towards_gate, internal=True)
-    #     | correcting_for_gate.to(surging_towards_gate)
-    #     | surging_forward.to(surging_towards_gate)
-    # )
+    surge_towards_gate = (
+        surging_towards_gate.to(surging_towards_gate, internal=True)
+        | correcting_for_gate.to(surging_towards_gate)
+        | surging_forward.to(surging_towards_gate)
+    )
 
-    proceed = (
+    surge = (
         surging_forward.to(blind_surge, cond="gate_about_to_pass")
         | surging_towards_gate.to(blind_surge, cond="gate_about_to_pass")
         | blind_surge.to(blind_surge, cond="gate_about_to_pass", internal=True)
@@ -390,7 +399,7 @@ class QualificationTask(StateMachine):
         | surging_forward.to(surging_forward, unless="gate_visible", internal=True)
     )
 
-    # blindly_surge = surging_towards_gate.to(blind_surge)
+    blindly_surge = surging_towards_gate.to(blind_surge)
 
     finish = blind_surge.to(finished)
 
@@ -398,6 +407,9 @@ class QualificationTask(StateMachine):
         self.m = MotionController()
 
         self.image_sub = None
+        self.latest_image = None
+        self.latest_frame_id = 0
+        self.current_frame_id = -1
         self.orientation_sub = None
         self.depth_sub = None
 
@@ -411,17 +423,29 @@ class QualificationTask(StateMachine):
         self.gate_visible = False
 
         self.correction_thread = None
+        self.image_thread = None
         self.single_pole_warning = False
         self.FOV_exceeded = 0
         self.blind_timer = None
         self.correcting = False
 
+        self.line_detector = cv2.cuda.createHoughSegmentDetector(
+            rho=1, 
+            theta=np.pi / 180, 
+            threshold=80,
+            minLineLength=MIN_LINE_LENGTH,
+            maxLineGap=5,
+            # maxLines=20,
+        )
+
+        self.opening_cuda = cv2.cuda.GpuMat()
+
         super(QualificationTask, self).__init__()
 
     def on_enter_wait_to_start(self):
         # wait for some time for everything to be fine
-        self.m.start()
         print("Waiting to start.")
+        self.m.start()
         time.sleep(3)
         self.start_task()
 
@@ -431,21 +455,31 @@ class QualificationTask(StateMachine):
 
     def set_yaw(self, angle):
         self.yaw_lock = angle
-        self.m.set_target_point(DoF.YAW, angle)
+        self.m.set_target_point(DoF.YAW, angle % 360)
 
     def on_orientation(self, vec: Vector3):
         self.current_yaw = vec.z
 
-        if self.yaw_lock is None:
+        if not self.yaw_lock:
             self.yaw_lock = vec.z
 
         self.m.set_current_point(DoF.YAW, vec.z)
 
-        # print(f"\rYaw: {self.current_yaw}, Lock: {self.yaw_lock}", end='')
+        print(f"\rYaw: {self.current_yaw}, Lock: {self.yaw_lock}", end='')
+    
+    def image_proc(self):
+        while True:
+            while self.latest_frame_id > self.current_frame_id:
+                self.current_frame_id = self.latest_frame_id
+                self.process_frame()
+            time.sleep(0)
+
 
     def on_enter_initializing_camera(self):
         print("Initializing Sensors.")
         self.image_sub = rospy.Subscriber(IMAGE_ROSTOPIC, Image, self.on_image)
+        self.image_thread = threading.Thread(target=self.image_proc, daemon=True)
+        self.image_thread.start()
         print("Camera done.")
 
         self.fix_yaw()
@@ -454,10 +488,10 @@ class QualificationTask(StateMachine):
         print("Attempting to fix yaw.")
         self.m.set_pid_constants(DoF.YAW, YAW_KP, YAW_KI, YAW_KD, YAW_ACCEPTABLE_ERROR)
         self.orientation_sub = rospy.Subscriber(
-            f"/{DATA_SOURCE}/orientation", Vector3, self.on_orientation
+            f"/{DATA_SOURCE}/orientation", Vector3, self.on_orientation, queue_size=1
         )
 
-        while self.yaw_lock is None:
+        while not self.yaw_lock:
             time.sleep(0.1)
 
         self.set_yaw(self.yaw_lock)
@@ -507,7 +541,7 @@ class QualificationTask(StateMachine):
     def on_enter_surging_forward(self):
         print("Surging forward, looking for gate.")
         self.enable_pitch_pid()
-        self.m.set_thrust(DoF.SURGE, 40)
+        self.m.set_thrust(DoF.SURGE, 50)
 
     def on_exit_surging_forward(self):
         print("Stopping Surge.")
@@ -517,12 +551,13 @@ class QualificationTask(StateMachine):
     def on_enter_surging_towards_gate(self):
         print("Surging towards gate.")
         self.enable_pitch_pid()
-        self.m.set_thrust(DoF.SURGE, 30)
+        self.m.set_thrust(DoF.SURGE, 50)
 
     def on_exit_surging_towards_gate(self):
         # print("Gate out of view.")
         self.disable_pitch_pid()
         self.m.set_thrust(DoF.SURGE, 0)
+        pass
 
     def blind_timer_async(self):
         time.sleep(10)
@@ -549,30 +584,35 @@ class QualificationTask(StateMachine):
 
     def correct_towards_gate_async(self):
         self.correcting = True
-        self.set_yaw((self.correction_required() + self.current_yaw) / 2)
 
-        time_slept = 0
-        # direction = 'left' if self.correction_required() < self.current_yaw else 'right'
-        # self.m.set_thrust(DoF.SWAY, 25 * (1 if direction == 'left' else -1))
+        while self.correction_required():
+            new_yaw = self.correction_required()
 
-        while self.correction_required() and time_slept < 0.5:
-            time.sleep(0.1)
-            time_slept += 0.1
-            # self.set_yaw(self.correction_required())
+            self.set_yaw(new_yaw)
+
+            time_slept = 0
+            # direction = 'left' if self.correction_required() < self.current_yaw else 'right'
+            # self.m.set_thrust(DoF.SWAY, 25 * (1 if direction == 'left' else -1))
+
+            while abs(self.current_yaw - new_yaw) > GATE_ACCEPTABLE_ERROR and time_slept < 1:
+                # time.sleep(0.1)
+                time_slept += 0.1
+                time.sleep(0.1)
+                # self.set_yaw((self.correction_required()))
 
         # self.m.set_thrust(DoF.SWAY, 0)
         self.correction_thread = None
         self.correcting = False
-        self.proceed()
+        self.surge()
 
 
     def on_enter_correcting_for_gate(self):
         print("Attempting to correcting heading towards gate.")
-        # self.set_yaw((self.correction_required() + self.current_yaw) / 2)
-
         if not self.correction_thread:
             self.correction_thread = threading.Thread(target=self.correct_towards_gate_async, daemon=True)
             self.correction_thread.start()
+        
+        # self.set_yaw(self.correction_required())
 
     # def on_correct_for_gate(self):
     #     new_heading = (self.current_yaw + self.correction_required()) * 10
@@ -588,10 +628,10 @@ class QualificationTask(StateMachine):
         x_pos = gate.x
 
         deviation = x_pos - FRAME_WIDTH / 2
-        yaw_required = deviation / FRAME_WIDTH * H_FOV
+        yaw_required = deviation / FRAME_WIDTH * H_FOV_CENTER
 
         if abs(yaw_required) > GATE_ACCEPTABLE_ERROR:
-            return REVERSE_YAW * yaw_required + self.current_yaw
+            return (REVERSE_YAW * yaw_required + self.current_yaw) % 360
 
         return False
 
@@ -609,7 +649,7 @@ class QualificationTask(StateMachine):
                 x_pos += clustered_lines[1].x_pos()
 
             deviation = x_pos - FRAME_WIDTH / 2
-            yaw_required = deviation / FRAME_WIDTH * H_FOV
+            yaw_required = deviation / FRAME_WIDTH * H_FOV_CENTER
 
             if abs(yaw_required) > GATE_ACCEPTABLE_ERROR:
                 self.set_yaw(REVERSE_YAW * yaw_required + self.current_yaw)
@@ -626,11 +666,147 @@ class QualificationTask(StateMachine):
             self.FOV_exceeded += 1
 
     def gate_about_to_pass(self):
-        return self.FOV_exceeded > 20
+        return self.FOV_exceeded > 10
 
-    def on_image(self, image):
-        image = self.bridge.imgmsg_to_cv2(image, "bgr8")
-        detect_gate(image)
+    def process_frame(self):
+        global clustered_lines
+
+        image = self.latest_image
+
+        if image is None:
+            return
+
+        # image = cv2.resize(image, (640, 320))
+        # image = cv2.GaussianBlur(image, (1, 1), 1)
+        # hls = cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        gray = clahe.apply(gray)
+
+        mask = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 2
+        )
+
+        kernel = np.ones((3, 3), np.uint8)
+        opening = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        opening = 255 - opening
+        opening = cv2.erode(opening, None, iterations=1)
+
+        canny = cv2.Canny(
+            cv2.GaussianBlur(clahe.apply(image[:, :, 0]), (11, 11), 0),
+            300,
+            700,
+            apertureSize=5,
+        )
+
+        canny = cv2.dilate(canny, None, iterations=1)
+        cv2.imshow("canny", canny)
+
+        cv2.imshow("opening", opening)
+
+        minLineLength = 50
+
+        self.opening_cuda.upload(canny)
+        gpu_mat = self.line_detector.detect(self.opening_cuda)
+        
+        lines = gpu_mat.download()
+
+        if lines is not None:
+            lines = lines[0]
+        
+        # lines = None
+
+        # lines = cv2.HoughLinesP(
+        #     image=canny,
+        #     rho=1,
+        #     theta=np.pi / 180,
+        #     threshold=80,
+        #     lines=np.array([]),
+        #     minLineLength=minLineLength,
+        #     maxLineGap=5,
+        # )
+
+        vertical_lines = []
+
+        if lines is not None:
+            for line in lines:
+                line = Line(*line)
+
+                # print(theta)
+                angle_threshold = 20
+
+                if abs(90 - line.angle()) <= angle_threshold:
+                    cv2.line(
+                        image,
+                        (line.x1, line.y1),
+                        (line.x2, line.y2),
+                        (0, 255, 0),
+                        3,
+                        cv2.LINE_AA,
+                    )
+                    vertical_lines.append(line)
+
+        # bunch lines together based on x position
+        vertical_lines.sort(key=lambda x: x.x_pos())
+
+        # cluster lines
+        clusters = []
+        cluster = []
+
+        for i in range(len(vertical_lines) - 1):
+            cluster.append(vertical_lines[i])
+            if vertical_lines[i + 1].x_pos() - vertical_lines[i].x_pos() > 20:
+                clusters.append(cluster)
+                cluster = []
+
+        if cluster:
+            clusters.append(cluster)
+
+        clustered_lines = []
+
+        for cluster in filter(lambda x: len(x) > 1, clusters):
+            ys = [x.y1 for x in cluster] + [x.y2 for x in cluster]
+            y1 = min(ys)
+            y2 = max(ys)
+
+            x = int(np.mean([x.x_pos() for x in cluster]))
+            cv2.line(image, (x, y1), (x, y2), (0, 0, 255), 3, cv2.LINE_AA)
+            clustered_line = Line(x, y1, x, y2)
+
+            if clustered_line.length() > 50:
+                clustered_lines.append(clustered_line)
+
+        memories.run_frame()
+
+        clustered_lines_copy = clustered_lines[:]
+
+        while clustered_lines:
+            line = clustered_lines.pop()
+
+            for other_line in clustered_lines:
+                if abs(line.y_pos() - other_line.y_pos()) < 100:
+                # if abs(line.bottom() - other_line.bottom()) < 25:
+                    gate = np.mean(
+                        [
+                            [line.x_pos(), other_line.x_pos()],
+                            [line.y_pos(), other_line.y_pos()],
+                        ],
+                        axis=1,
+                    )
+                    memories.remember(
+                        gate[0],
+                        gate[1],
+                        min(line.x_pos(), other_line.x_pos()),
+                        max(line.x_pos(), other_line.x_pos()),
+                    )
+        
+        clustered_lines = clustered_lines_copy
+
+        for gate in memories.recall():
+            cv2.circle(image, tuple(int(x) for x in gate), 10, (0, 255, 255), -1)
+
+        cv2.imshow("image", image)
+        cv2.waitKey(1)
 
         if not self.camera_ready or self.finished.is_active:
             return
@@ -643,20 +819,23 @@ class QualificationTask(StateMachine):
                 # self.set_yaw(self.correction_required())
                 self.correct_for_gate()
             elif not self.correcting:
-                self.proceed()
+                self.surge()
         else:
             self.preventive_measures()
             self.gate_visible = False
             
             if not self.correcting:
-                self.proceed()
+                self.surge()
+
+    def on_image(self, image):
+        self.latest_image = self.bridge.imgmsg_to_cv2(image, "bgr8")
+        self.latest_frame_id += 1
+        # detect_gate(image)
+
+        
 
 
 if __name__ == "__main__":
-    rospy.init_node("Node")
+    # rospy.init_node("Node")
     task = QualificationTask()
-    
-    # graph = DotGraphMachine(QualificationTask)()
-    # graph.write_png("./qualify.png")
-    
     rospy.spin()
