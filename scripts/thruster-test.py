@@ -6,7 +6,7 @@ from sshkeyboard import listen_keyboard, stop_listening
 
 PWM_OFF = 1472
 PWM_ON = 1600
-NUM_THRUSTERS = 7
+NUM_THRUSTERS = 6
 
 term = blessings.Terminal()
 
