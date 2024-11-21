@@ -9,32 +9,33 @@ from std_msgs.msg import Float32MultiArray, Int32MultiArray, Float32
 from geometry_msgs.msg import Vector3
 
 
-DATA_SOURCE = "emulation"
+# DATA_SOURCE = "emulation"
+DATA_SOURCE = "sensors"
 
-HEAVE_KP = -160 # -100
-HEAVE_KI = 0
-HEAVE_KD = -10
-HEAVE_TARGET = 0.3
+HEAVE_KP = -40 # -90 #-70 #-60 #-40 #-50 # -100
+HEAVE_KI = 0.09
+HEAVE_KD =  4.7 # 5.2 #6.5
+HEAVE_TARGET = 0.25
 HEAVE_ACCEPTABLE_ERROR = 0.01
-HEAVE_OFFSET = -4
+HEAVE_OFFSET = -0.11 #-0.13 # 0
 
-PITCH_KP = 1  #0.8
-PITCH_KI = 0.02
-PITCH_KD = 0.1 #0.2
+PITCH_KP = -0.24/2 #-0.25  #0.8
+PITCH_KI = 0.0015 #0.02
+PITCH_KD = 0.2 # 0.15 #0.2
 PITCH_TARGET = 0
-PITCH_ACCEPTABLE_ERROR = .7
-PITCH_OFFSET = 0 #5
+PITCH_ACCEPTABLE_ERROR = 0.7
+PITCH_OFFSET = -0.5 #5
 
-ROLL_KP = 1
+ROLL_KP = 0.1 #0.1
 ROLL_KI = 0
 ROLL_KD = 0.4
 ROLL_TARGET = 0
 ROLL_ACCEPTABLE_ERROR = 1.5
 
-YAW_KP = 1.5 # 0.86
-YAW_KI = 0.05
-YAW_KD = 0.4 # 0.3
-YAW_TARGET = 225
+YAW_KP = -6# 0.86
+YAW_KI = 0
+YAW_KD = 0.1 # 0.3
+YAW_TARGET  = 65
 YAW_ACCEPTABLE_ERROR = 1
 
 
@@ -159,8 +160,8 @@ mp = {
     "d": thrust(DoF.YAW, 1),
     "z": thrust(DoF.HEAVE, 1),
     "x": thrust(DoF.HEAVE, -1),
-    "q": thrust(DoF.SWAY, 1),
-    "e": thrust(DoF.SWAY, -1),
+    "q": thrust(DoF.ROLL, 1),
+    "e": thrust(DoF.ROLL, -1),
     "h": pid(DoF.HEAVE),
     "j": pid(DoF.PITCH),
     "k": pid(DoF.ROLL),

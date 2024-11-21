@@ -17,30 +17,36 @@ START_YAW = 0
 REVERSE_YAW = -1
 DATA_SOURCE = "sensors"
 
-HEAVE_KP = -160
-HEAVE_KI = 0
-HEAVE_KD = -30
-HEAVE_TARGET = 0.5
+HEAVE_KP = -40 #-90 # -160
+HEAVE_KI = 0.09 #0
+HEAVE_KD = 4.7 #0.47 #5.2 #-30
+HEAVE_TARGET = 0.25 #0.25 #0.5
 HEAVE_ACCEPTABLE_ERROR = 0.01
-HEAVE_OFFSET = -4
+HEAVE_OFFSET = -0.11 #-0.16 #-4
 
-PITCH_KP = 10
-PITCH_KI = 0
-PITCH_KD = 4
+PITCH_KP = -0.12 #-0.2 #10
+PITCH_KI = 0.0015
+PITCH_KD = 0.2 #0.15 #4
 PITCH_TARGET = 0
-PITCH_ACCEPTABLE_ERROR = 1.5
+PITCH_ACCEPTABLE_ERROR = 0.7 #1.5
+PITCH_OFFSET = -0.5 #1 # this is new
 
-ROLL_KP = 1
+ROLL_KP = 0.1 #0.15 #1
 ROLL_KI = 0
 ROLL_KD = 0.4
 ROLL_TARGET = 0
 ROLL_ACCEPTABLE_ERROR = 1.5
 
-YAW_KP = 2
-YAW_KI = 0.13
-YAW_KD = 0.5
+# YAW_KP = 0.4 #2
+# YAW_KI = 0 #0.13
+# YAW_KD = 0.3 #0.5
+# YAW_TARGET = 0
+# YAW_ACCEPTABLE_ERROR = 1.5
+YAW_KP = 0
+YAW_KI = 0 #0.13
+YAW_KD = 0 #0.5
 YAW_TARGET = 0
-YAW_ACCEPTABLE_ERROR = 1.5
+YAW_ACCEPTABLE_ERROR = 0
 
 
 class QualificationTask(StateMachine):
@@ -49,7 +55,7 @@ class QualificationTask(StateMachine):
     fixing_yaw = State()
     enabling_heave_pid = State()
     surging_forward = State()
-    finished = State()
+    finished = State(final=True)
 
 
     start_initializing_sensors = wait_to_start.to(initializing_sensors)
@@ -57,6 +63,7 @@ class QualificationTask(StateMachine):
     heave_down = fixing_yaw.to(enabling_heave_pid)
     surge_forward = enabling_heave_pid.to(surging_forward)
     finish = surging_forward.to(finished)
+    # surge_forward_directly = initializing_sensors.to(surging_forward)
 
 
     def __init__(self):
@@ -90,7 +97,9 @@ class QualificationTask(StateMachine):
             self.led_publisher.publish(self.led_message)
 
         self.current_depth = depth.data
-        print(self.current_depth)
+        # print(self.current_depth)
+        # rospy.loginfo(f"Current Depth: {self.current_depth}")
+        
         self.m.set_current_point(DoF.HEAVE, depth.data)
 
     def set_yaw(self, angle):
@@ -123,8 +132,8 @@ class QualificationTask(StateMachine):
         self.led_message.G = 0
         self.led_publisher.publish(self.led_message)
 
-        while self.current_depth is None or self.current_depth < 0.1:
-           time.sleep(0)
+        # while self.current_depth is None or self.current_depth < 0.1:
+        #    time.sleep(0)
         
         self.led_message.R = 3
         self.led_message.B = 3
@@ -138,14 +147,14 @@ class QualificationTask(StateMachine):
         self.led_publisher.publish(self.led_message)
 
         current_time = time.time()
-        samples = []
+        samples = [170]
 
-        while self.current_yaw is None:
-            time.sleep(0)
+        # while self.current_yaw is None:
+        #     time.sleep(0)
 
-        while time.time() - current_time < 5:
-            samples.append(self.current_yaw)
-            time.sleep(0.1)
+        # while time.time() - current_time < 5:
+        #     samples.append(self.current_yaw)
+        #     time.sleep(0.1)
         samples = [(360 - x if x >= 180 else x) for x in samples]
         print(samples)
         self.yaw_lock = (sum(samples) / len(samples))
@@ -156,6 +165,7 @@ class QualificationTask(StateMachine):
         self.led_message.G = 1
         self.led_publisher.publish(self.led_message)
         self.fix_yaw()
+        # self.surge_forward_directly()
 
     def on_enter_fixing_yaw(self):
         print("Attempting to fix yaw.")
@@ -215,7 +225,8 @@ class QualificationTask(StateMachine):
         self.m.set_control_mode(DoF.HEAVE, ControlMode.CLOSED_LOOP)
     
     def timer_async(self):
-        time.sleep(35)
+        print("Timer started")
+        time.sleep(5)
         self.finish()
 
     def on_enter_surging_forward(self):
@@ -233,7 +244,7 @@ class QualificationTask(StateMachine):
         # self.disable_pitch_pid()
     
     def on_finished(self):
-        self.m.set_control_mode(DoF.HEAVE, ControlMode.OPEN_LOOP)
+        self.m.set_control_mode(DoF.HEAVE, ControlMode.CLOSED_LOOP)
 
 
 if __name__ == "__main__":
