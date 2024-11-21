@@ -21,6 +21,7 @@ add_message_files(
   PidLimits.msg
   TargetPoint.msg
   Thrust.msg
+  LEDControl.msg
 )
 
 catkin_python_setup()
