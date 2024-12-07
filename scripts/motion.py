@@ -11,6 +11,8 @@ from tvmc import MotionController, DoF, ControlMode
 from rose_tvmc_msg.msg import LEDControl
 import collections
 
+SURGE_TIME = 5
+
 # globals
 CURRENT_YAW = 0
 START_YAW = 0
@@ -20,7 +22,7 @@ DATA_SOURCE = "sensors"
 HEAVE_KP = -40 #-90 # -160
 HEAVE_KI = 0.09 #0
 HEAVE_KD = 4.7 #0.47 #5.2 #-30
-HEAVE_TARGET = 0.25 #0.25 #0.5
+HEAVE_TARGET = 0.3 #0.25 #0.5
 HEAVE_ACCEPTABLE_ERROR = 0.01
 HEAVE_OFFSET = -0.11 #-0.16 #-4
 
@@ -42,11 +44,11 @@ ROLL_ACCEPTABLE_ERROR = 1.5
 # YAW_KD = 0.3 #0.5
 # YAW_TARGET = 0
 # YAW_ACCEPTABLE_ERROR = 1.5
-YAW_KP = 0
-YAW_KI = 0 #0.13
-YAW_KD = 0 #0.5
-YAW_TARGET = 0
-YAW_ACCEPTABLE_ERROR = 0
+YAW_KP = 0#0.19
+YAW_KI = 0#0.00 #0.12
+YAW_KD = 0#0.1
+YAW_TARGET = 0#0
+YAW_ACCEPTABLE_ERROR = 0#1.5
 
 
 class QualificationTask(StateMachine):
@@ -151,7 +153,7 @@ class QualificationTask(StateMachine):
         self.led_publisher.publish(self.led_message)
 
         current_time = time.time()
-        samples = [170]
+        samples = [173]
 
         # while self.current_yaw is None:
         #     time.sleep(0)
@@ -173,26 +175,26 @@ class QualificationTask(StateMachine):
 
     def on_enter_fixing_yaw(self):
         print("Attempting to fix yaw.")
-        self.set_yaw(self.yaw_lock)
-        self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
+        #self.set_yaw(self.yaw_lock)
+        #self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
 
-        time.sleep(1)
-        self.set_yaw(self.yaw_lock - 35)
-        self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
+        # time.sleep(1)
+        # self.set_yaw(self.yaw_lock - 35)
+        # self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
 
-        time.sleep(1)
-        self.set_yaw(self.yaw_lock)
-        self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
+        # time.sleep(1)
+        # self.set_yaw(self.yaw_lock)
+        # self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
 
         self.heave_down()
 
 
     def on_enter_yaw_180(self):
-        print("Attempting to yaw 180.")
+        #print("Attempting to yaw 180.")
 
-        time.sleep(1)
-        self.set_yaw(self.yaw_lock - 180)
-        self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
+        # time.sleep(1)
+        # self.set_yaw(self.yaw_lock - 180)
+        # self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
 
         self.surging_after_yaw_180()
 
@@ -221,6 +223,7 @@ class QualificationTask(StateMachine):
             or abs(self.current_depth - HEAVE_TARGET) > HEAVE_ACCEPTABLE_ERROR * 3
         ):
             time.sleep(0.1)
+            #break
         
         self.surge_forward()
 
@@ -249,23 +252,24 @@ class QualificationTask(StateMachine):
     
     def timer_async(self):
         print("Timer 1 started")
-        time.sleep(2)
+        time.sleep(SURGE_TIME)
         
         self.yaw_180_after_surging()
+        
 
     def timer_async_2(self):
         print("Timer 2 started")
-        time.sleep(2)
+        time.sleep(0.1)
 
         self.finish()
 
     def on_enter_surging_forward(self):
-        self.enable_pitch_pid()
-        time.sleep(0.1)
+        #self.enable_pitch_pid()
+        time.sleep(4)
 
 
         print("Surging forward")
-        self.m.set_thrust(DoF.SURGE, 75)
+        self.m.set_thrust(DoF.SURGE, 50)
 
         if self.timer is None:
             self.timer = threading.Thread(target=self.timer_async, daemon=True)
@@ -277,7 +281,7 @@ class QualificationTask(StateMachine):
 
 
         print("Surging forward again")
-        self.m.set_thrust(DoF.SURGE, 75)
+        self.m.set_thrust(DoF.SURGE, 60)
 
         if self.timer_2 is None:
             self.timer_2 = threading.Thread(target=self.timer_async_2, daemon=True)
@@ -287,13 +291,24 @@ class QualificationTask(StateMachine):
         print("Stopping Surge.")
         self.m.set_thrust(DoF.SURGE, 0)
         # self.disable_pitch_pid()
+        
+        self.m.set_control_mode(DoF.YAW, ControlMode.OPEN_LOOP)
+        self.m.set_thrust(DoF.YAW, 50)
+        time.sleep(3)
+        self.m.set_thrust(DoF.YAW, 0)
+        self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
+       
+        
+        
     def on_exit_surging_forward_2(self):
         print("Stopping Surge 2.")
         self.m.set_thrust(DoF.SURGE, 0)
+        self.m.set_control_mode(DoF.YAW, ControlMode.OPEN_LOOP)
         # self.disable_pitch_pid()
     
     def on_finished(self):
         self.m.set_control_mode(DoF.HEAVE, ControlMode.CLOSED_LOOP)
+        #self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
 
 
 if __name__ == "__main__":
