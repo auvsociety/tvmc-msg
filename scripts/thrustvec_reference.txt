@@ -1,10 +1,25 @@
+old 
 "heave": [back, 0, front right, 0, front left, 0],
 "surge": [0, top left, 0, top right, 0, bottom],
+new
+"heave": [0, 0, front right, back, front left, 0],
+"surge": [top right, top left, 0, 0, 0, bottom],
 
+new new new
+"heave": [frontright , back , frontleft,0,0,0]
+"surge": [0,0,0, topright ,topleft ,bottom]
 
-"surge": [0, -0.5, 0, 0.5, 0, -1],
+ old
+	"surge": [0, -0.5, 0, 0.6, 0, -0.7],
         "sway": [0, 0, 0, 0, 0, 0, 0],
-        "heave": [-1, 0, 0.9, 0, -0.9, 0],
+        "heave": [-1, 0, 0.9, 0, -1, 0],
         "yaw": [0, -0.4, 0, -0.4, 0, 0],
-        "pitch": [-1, 0, -1, 0, 1, 0],
-        "roll": [0, 0, -0.55, 0, 0.55, 0]
+        "pitch": [-0.9, 0, -1, 0, 1, 0],
+        "roll": [0, 0, -1, 0, 1, 0]
+new
+	"surge": [0, 0, 0, 0.38, 0.58, 0.7],
+        "sway": [0, 0, 0, 0, 0, 0, 0],
+        "heave": [1, 1, 0.7, 0, 0, 0],
+        "yaw": [0, 0, 0, -0.4, -0.4, 0],
+        "pitch": [-1, -1, -1, 0, 0, 0],
+        "roll": [0.55, 0, -0.55, 0, 0, 0]
