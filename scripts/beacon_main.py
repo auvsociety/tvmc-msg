@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
+from pathlib import Path
 import cv2
 import depthai as dai
 import time
 import numpy as np
 
-nnPath = './beacon/beacon_openvino_2022.1_6shave.blob'
+nnPath = str((Path(__file__).parent / Path('./../yolo_models/beacon.blob')).resolve().absolute())
 
 labelMap = [
 	"Beacon"

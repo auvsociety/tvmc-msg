@@ -14,7 +14,7 @@ def main():
     pub_frame = rospy.Publisher('/yolo_frame', CompressedImage, queue_size=10)
     
     nnPath = str((Path(__file__).parent / Path('./../yolo_models/beacon.blob')).resolve().absolute())
-    labelMap = ["Gates"]
+    labelMap = ["Beacon"]
     
     pipeline = dai.Pipeline()
     cam = pipeline.create(dai.node.ColorCamera)
@@ -34,8 +34,17 @@ def main():
     nn.setConfidenceThreshold(0.5)
     nn.setNumClasses(1)
     nn.setCoordinateSize(4)
+    nn.setAnchors([10.0,13.0,16.0,30.0,33.0,23.0,30.0,61.0,62.0,45.0,59.0,119.0,116.0,90.0,156.0,198.0,373.0,326.0])
+    nn.setAnchorMasks({
+                    "side80": [0,1,2],
+                    "side40": [3,4,5],
+                    "side20": [6,7,8]
+    })
+    nn.setIouThreshold(0.5)
     nn.setBlobPath(nnPath)
+    nn.setNumInferenceThreads(2)
     nn.input.setBlocking(False)
+
     
     cam.preview.link(nn.input)
     cam.preview.link(xout_frame.input)
