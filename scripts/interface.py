@@ -12,32 +12,33 @@ from geometry_msgs.msg import Vector3
 # DATA_SOURCE = "emulation"
 DATA_SOURCE = "sensors"
 
-HEAVE_KP = -40 # -90 #-70 #-60 #-40 #-50 # -100
-HEAVE_KI = 0.09
-HEAVE_KD =  4.7 # 5.2 #6.5
-HEAVE_TARGET = 0.25
-HEAVE_ACCEPTABLE_ERROR = 0.01
-HEAVE_OFFSET = -0.11 #-0.13 # 0
+HEAVE_TARGET_OFFSET = -0.07
+HEAVE_KP = -45 # -90 #-70 #-60 #-40 #-50 # -100
+HEAVE_KI = -0.05
+HEAVE_KD =  25# 5.2 #6.5
+HEAVE_TARGET = 0.25 - HEAVE_TARGET_OFFSET
+HEAVE_ACCEPTABLE_ERROR = 0
+HEAVE_OFFSET = 0 #-0.13 # 0
 
-PITCH_KP = -0.24/2 #-0.25  #0.8
-PITCH_KI = 0.0015 #0.02
-PITCH_KD = 0.2 # 0.15 #0.2
-PITCH_TARGET = 0
-PITCH_ACCEPTABLE_ERROR = 0.7
-PITCH_OFFSET = -0.5 #5
+PITCH_TARGET_OFFSET = -5
+PITCH_KP = 0.4#-0.25  #0.8
+PITCH_KI = 0.001#0.02
+PITCH_KD = 0 # 0.15 #0.2
+PITCH_TARGET = 0 - PITCH_TARGET_OFFSET
+PITCH_ACCEPTABLE_ERROR = 1
+PITCH_OFFSET = 0 #5
 
-ROLL_KP = 0.1 #0.1
+ROLL_KP = -0.2 #0.1
 ROLL_KI = 0
-ROLL_KD = 0.4
-ROLL_TARGET = 0
-ROLL_ACCEPTABLE_ERROR = 1.5
+ROLL_KD = 0
+ROLL_TARGET = 3
+ROLL_ACCEPTABLE_ERROR = 1
 
-YAW_KP = -6# 0.86
+YAW_KP = 5# 0.86
 YAW_KI = 0
-YAW_KD = 0.1 # 0.3
-YAW_TARGET  = 65
+YAW_KD = 0 # 0.3
+YAW_TARGET  = 270
 YAW_ACCEPTABLE_ERROR = 1
-
 
 m = MotionController()
 term = blessings.Terminal()
@@ -162,6 +163,8 @@ mp = {
     "x": thrust(DoF.HEAVE, -1),
     "q": thrust(DoF.ROLL, 1),
     "e": thrust(DoF.ROLL, -1),
+    "u": thrust(DoF.PITCH, 1),
+    "i": thrust(DoF.PITCH, -1),
     "h": pid(DoF.HEAVE),
     "j": pid(DoF.PITCH),
     "k": pid(DoF.ROLL),

@@ -24,36 +24,35 @@ START_YAW = 0
 REVERSE_YAW = -1
 DATA_SOURCE = "sensors"
 
-HEAVE_KP = -40 #-90 # -160
-HEAVE_KI = 0.09 #0
-HEAVE_KD = 4.7 #0.47 #5.2 #-30
-HEAVE_TARGET = 0.3 #0.25 #0.5
-HEAVE_ACCEPTABLE_ERROR = 0.01
-HEAVE_OFFSET = -0.11 #-0.16 #-4
 
-PITCH_KP = -0.12 #-0.2 #10
-PITCH_KI = 0.0015
-PITCH_KD = 0.2 #0.15 #4
-PITCH_TARGET = 0
-PITCH_ACCEPTABLE_ERROR = 0.7 #1.5
-PITCH_OFFSET = -0.5 #1 # this is new
+HEAVE_TARGET_OFFSET = -0.07
+HEAVE_KP = -45 # -90 #-70 #-60 #-40 #-50 # -100
+HEAVE_KI = -0.05
+HEAVE_KD =  25# 5.2 #6.5
+HEAVE_TARGET = 0.25 - HEAVE_TARGET_OFFSET
+HEAVE_ACCEPTABLE_ERROR = 0
+HEAVE_OFFSET = 0 #-0.13 # 0
 
-ROLL_KP = 0.1 #0.15 #1
+PITCH_TARGET_OFFSET = -5
+PITCH_KP = 0.4#-0.25  #0.8
+PITCH_KI = 0.001#0.02
+PITCH_KD = 0 # 0.15 #0.2
+PITCH_TARGET = 0 - PITCH_TARGET_OFFSET
+PITCH_ACCEPTABLE_ERROR = 1
+PITCH_OFFSET = 0 #5
+
+ROLL_KP = -0.2 #0.1
 ROLL_KI = 0
-ROLL_KD = 0.4
-ROLL_TARGET = 0
-ROLL_ACCEPTABLE_ERROR = 1.5
+ROLL_KD = 0
+ROLL_TARGET = 3
+ROLL_ACCEPTABLE_ERROR = 1
 
-# YAW_KP = 0.4 #2
-# YAW_KI = 0 #0.13
-# YAW_KD = 0.3 #0.5
-# YAW_TARGET = 0
-# YAW_ACCEPTABLE_ERROR = 1.5
-YAW_KP = 0#0.19
-YAW_KI = 0#0.00 #0.12
-YAW_KD = 0#0.1
-YAW_TARGET = 0#0
-YAW_ACCEPTABLE_ERROR = 2#1.5
+YAW_KP = 5# 0.86
+YAW_KI = 0
+YAW_KD = 0 # 0.3
+YAW_TARGET  = 270
+YAW_ACCEPTABLE_ERROR = 1
+
 
 
 class QualificationTask(StateMachine):
@@ -86,7 +85,7 @@ class QualificationTask(StateMachine):
         self.timer = None
         self.timer_2 = None
         self.timer_rotate = None
-        self.led_publisher = rospy.Publisher("/diagnostics/led", LEDControl, queue_size=1)
+        self.led_publisher = rospy.Publisher("/control/led", LEDControl, queue_size=1)
         self.led_message = LEDControl()
         self.led_message.R = -1
         self.led_message.G = -1
@@ -227,9 +226,10 @@ class QualificationTask(StateMachine):
 
         #self.surging_after_yaw_180()
     def on_exit_yaw_180(self):
-    	print("Stopping Yaw")
-    	self.m.set_thrust(DoF.YAW, 0)
-
+        print("Stopping Yaw")
+        self.m.set_thrust(DoF.YAW, 0)
+    	
+    
     def on_enter_enabling_yaw_pid(self):
         print("Enabling yaw PID.")
         self.m.set_pid_constants(DoF.YAW, YAW_KP, YAW_KI, YAW_KD, YAW_ACCEPTABLE_ERROR)
@@ -340,7 +340,7 @@ class QualificationTask(StateMachine):
         self.m.set_thrust(DoF.SURGE, 0)
         # self.disable_pitch_pid()
     
-    def on_finished(self):
+    def on_enter_finished(self):
         self.disable_heave_pid()
         
 
