@@ -26,6 +26,7 @@ def main():
     nnout.setStreamName("nn")
     
     cam.setPreviewSize(640, 640)
+    cam.setPreviewKeepAspectRatio(False)
     cam.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
     cam.setInterleaved(False)
     cam.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
@@ -35,11 +36,7 @@ def main():
     nn.setNumClasses(1)
     nn.setCoordinateSize(4)
     nn.setAnchors([10.0,13.0,16.0,30.0,33.0,23.0,30.0,61.0,62.0,45.0,59.0,119.0,116.0,90.0,156.0,198.0,373.0,326.0])
-    nn.setAnchorMasks({
-                    "side80": [0,1,2],
-                    "side40": [3,4,5],
-                    "side20": [6,7,8]
-    })
+    nn.setAnchorMasks({"side80": [0,1,2], "side40": [3,4,5], "side20": [6,7,8]})
     nn.setIouThreshold(0.5)
     nn.setBlobPath(nnPath)
     nn.setNumInferenceThreads(2)

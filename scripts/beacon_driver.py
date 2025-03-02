@@ -12,12 +12,15 @@ from rose_tvmc_msg.msg import LEDControl
 
 detections = []
 frame = None
-OFFSET = 50  # Acceptable error in pixels
 FRAME_WIDTH = 640
+OFFSET = 40 / FRAME_WIDTH
+RESTING_YAW_THRUST = 0
 YAW_THRUST = 40
 YAW_ADJUSTMENT_THRUST = None
-YAW_ADJUSTMENT_TIME = 0.1
+YAW_TIME = 0.3
+YAW_ADJUSTMENT_TIME = None
 DATA_SOURCE = "sensors"
+LEFT = None
 
 PID_STATUS = {
     "HEAVE": False,
@@ -28,33 +31,32 @@ PID_STATUS = {
 
 
 HEAVE_TARGET_OFFSET = -0.07
-HEAVE_KP = -45 # -90 #-70 #-60 #-40 #-50 # -100
+HEAVE_KP = -45
 HEAVE_KI = -0.05
-HEAVE_KD =  25# 5.2 #6.5
+HEAVE_KD =  25
 HEAVE_TARGET = 0.25 - HEAVE_TARGET_OFFSET
 HEAVE_ACCEPTABLE_ERROR = 0.05
-HEAVE_OFFSET = 0 #-0.13 # 0
+HEAVE_OFFSET = 0
 
 PITCH_TARGET_OFFSET = -5
-PITCH_KP = 0.4#-0.25  #0.8
-PITCH_KI = 0.001#0.02
-PITCH_KD = 0 # 0.15 #0.2
+PITCH_KP = 0.4
+PITCH_KI = 0.001
+PITCH_KD = 0
 PITCH_TARGET = 0 - PITCH_TARGET_OFFSET
 PITCH_ACCEPTABLE_ERROR = 1
-PITCH_OFFSET = 0 #5
+PITCH_OFFSET = 0
 
-ROLL_KP = -0.2 #0.1
+ROLL_KP = -0.2
 ROLL_KI = 0
 ROLL_KD = 0
 ROLL_TARGET = 3
 ROLL_ACCEPTABLE_ERROR = 1
 
-YAW_KP = 5# 0.86
+YAW_KP = 5
 YAW_KI = 0
-YAW_KD = 0 # 0.3
+YAW_KD = 0
 YAW_TARGET  = 270
 YAW_ACCEPTABLE_ERROR = 1
-
 
 
 
@@ -63,25 +65,25 @@ def detection_callback(msg):
     global detections
     detections = list(msg.data) if msg.data else []
 
-def frame_callback(msg):
-    global frame
-    np_arr = np.frombuffer(msg.data, np.uint8)
-    frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+# def frame_callback(msg):
+#     global frame
+#     np_arr = np.frombuffer(msg.data, np.uint8)
+#     frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
     
-    if frame is None:
-        return
-    center_x = FRAME_WIDTH // 2
-    target_x = None
+#     if frame is None:
+#         return
+#     center_x = FRAME_WIDTH // 2
+#     target_x = None
     
-    if detections:
-        for i in range(0, len(detections), 5):
-            xmin, ymin, xmax, ymax, confidence = detections[i:i+5]
-            xmin, ymin, xmax, ymax = int(xmin * frame.shape[1]), int(ymin * frame.shape[0]), int(xmax * frame.shape[1]), int(ymax * frame.shape[0])
-            target_x = (xmin + xmax) // 2
+#     if detections:
+#         for i in range(0, len(detections), 5):
+#             xmin, ymin, xmax, ymax, confidence = detections[i:i+5]
+#             xmin, ymin, xmax, ymax = int(xmin * frame.shape[1]), int(ymin * frame.shape[0]), int(xmax * frame.shape[1]), int(ymax * frame.shape[0])
+#             target_x = (xmin + xmax) // 2
             
-            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
-            cv2.putText(frame, f"Conf: {confidence:.2f}", (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-            cv2.putText(frame, f"Center: {target_x}", (xmin, ymin - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+#             cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+#             cv2.putText(frame, f"Conf: {confidence:.2f}", (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+#             cv2.putText(frame, f"Center: {target_x}", (xmin, ymin - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
     
 class YawControlStateMachine(StateMachine):
     waiting = State(initial=True)
@@ -119,9 +121,9 @@ class YawControlStateMachine(StateMachine):
     def on_enter_initializing_sensors(self):
         print("Initializing Sensors.")
 
-        self.orientation_sub = rospy.Subscriber(
-            f"/{DATA_SOURCE}/orientation", Vector3, self.on_orientation
-        )
+        # self.orientation_sub = rospy.Subscriber(
+        #     f"/{DATA_SOURCE}/orientation", Vector3, self.on_orientation
+        # )
         self.depth_sub = rospy.Subscriber(f"/{DATA_SOURCE}/depth", Float32, self.on_depth)
 
         time.sleep(5)
@@ -158,21 +160,21 @@ class YawControlStateMachine(StateMachine):
     def disable_heave_pid(self):
         self.m.set_control_mode(DoF.HEAVE, ControlMode.OPEN_LOOP)
 
-    def yaw_thread(self, t :float, thrust:int, yaw_direction:int):
+    def apply_yaw_thrust(self, t :float, thrust:int, yaw_direction:int):
         applied_thrust = yaw_direction * thrust
         print(f"Applying yaw thrust: {applied_thrust}")
         self.m.set_thrust(DoF.YAW, applied_thrust)
         time.sleep(t)
-        self.m.set_thrust(DoF.YAW, 0)
-        print("Yaw thrust set to 0")
-        time.sleep(t/2)
+        self.m.set_thrust(DoF.YAW, RESTING_YAW_THRUST)
+        print(f"Yaw thrust set to {RESTING_YAW_THRUST}")
+        # time.sleep(t/2)
         
 
     def on_enter_adjusting_yaw(self, t, thrust,error):
         if not self.running:
             self.running = True
             yaw_direction = 1 if error > 0 else -1
-            self.yaw_thread = threading.Thread(target=self.yaw_thread, args=(t,thrust,yaw_direction), daemon=True)
+            self.yaw_thread = threading.Thread(target=self.apply_yaw_thrust, args=(t,thrust,yaw_direction), daemon=True)
             self.yaw_thread.start()
 
 
@@ -180,32 +182,36 @@ class YawControlStateMachine(StateMachine):
         self.running = False
         if self.yaw_thread and self.yaw_thread.is_alive():
             self.yaw_thread.join()
-        self.m.set_thrust(DoF.YAW, 0)
+        self.m.set_thrust(DoF.YAW, RESTING_YAW_THRUST)
         print("Yaw adjustment stopped, thrust set to 0")
 
 yaw_state_machine = YawControlStateMachine()
 
 def process_detections():
-    
 
-    center_x = FRAME_WIDTH // 2
+    centerX = 0.50
     # for i in range(0, len(detections), 5):
     for i in range(0, 5, 5):
         if i + 4 >= len(detections):
             continue
-        xmin, _, xmax, _, _ = detections[i:i+5]
-        target_x = ((xmin + xmax) // 2 ) * FRAME_WIDTH
-        error = target_x - center_x
+        xmin, ymin, xmax, ymax, confidence = detections[i:i+5]
+        targetX = (xmin + xmax) / 2
+        targetY = (ymin + ymax) / 2
+        aspectRatio = (xmax - xmin) / (ymax - ymin)
+        print(f"Aspect Ratio: {aspectRatio}")
+
+        error = targetX - centerX
 
         if abs(error) > OFFSET and yaw_state_machine.is_waiting_to_yaw:
             YAW_ADJUSTMENT_THRUST = error * YAW_THRUST
+            YAW_ADJUSTMENT_TIME = error * YAW_TIME
             yaw_state_machine.adjust_yaw(YAW_ADJUSTMENT_TIME,YAW_ADJUSTMENT_THRUST, error)
         elif abs(error) <= OFFSET and yaw_state_machine.is_adjusting_yaw:
             yaw_state_machine.wait_yaw()
 
 def main():
     rospy.Subscriber('/yolo_detections', Float32MultiArray, detection_callback)
-    rospy.Subscriber('/yolo_frame', CompressedImage, frame_callback)
+    # rospy.Subscriber('/yolo_frame', CompressedImage, frame_callback)
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
         process_detections()
