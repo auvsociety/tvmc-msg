@@ -32,7 +32,7 @@ def main():
     cam.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
     cam.setFps(15)
     
-    nn.setConfidenceThreshold(0.5)
+    nn.setConfidenceThreshold(0.4)
     nn.setNumClasses(1)
     nn.setCoordinateSize(4)
     nn.setAnchors([10.0,13.0,16.0,30.0,33.0,23.0,30.0,61.0,62.0,45.0,59.0,119.0,116.0,90.0,156.0,198.0,373.0,326.0])

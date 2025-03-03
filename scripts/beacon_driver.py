@@ -177,7 +177,6 @@ class YawControlStateMachine(StateMachine):
             self.yaw_thread = threading.Thread(target=self.apply_yaw_thrust, args=(t,thrust,yaw_direction), daemon=True)
             self.yaw_thread.start()
 
-
     def on_exit_adjusting_yaw(self):
         self.running = False
         if self.yaw_thread and self.yaw_thread.is_alive():

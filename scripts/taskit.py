@@ -1,13 +1,13 @@
+#!/usr/bin/env python3
 import rospy
 import cv2, threading, time
 import numpy as np
 from statemachine import StateMachine, State
 from sensor_msgs.msg import CompressedImage
-from std_msgs.msg import Float32MultiArray
-from std_msgs.msg import Float32, Vector3
+from std_msgs.msg import Float32MultiArray, Int16, Float32
+from geometry_msgs.msg import Vector3
 from tvmc import MotionController, DoF, ControlMode
 from rose_tvmc_msg.msg import LEDControl
-
 
 
 detections = []
@@ -16,7 +16,7 @@ FRAME_WIDTH = 640
 OFFSET = 40 / FRAME_WIDTH
 
 RESTING_YAW_THRUST = 0
-YAW_THRUST = 40
+YAW_THRUST = 100
 YAW_ADJUSTMENT_THRUST = None
 YAW_TIME = 0.3
 YAW_ADJUSTMENT_TIME = None
@@ -26,8 +26,8 @@ SURGE_THRUST = 40
 
 AREA_THRESHOLD = 0.7 # (0,1)
 
+
 DATA_SOURCE = "sensors"
-FIRST_OR_DATA = True
 
 PID_STATUS = {
     "HEAVE": True,
@@ -35,14 +35,6 @@ PID_STATUS = {
     "ROLL": False,
     "YAW": False
 }
-
-SAFETY_LIMITS = {
-    "DEPTH": 0.1,
-    "PITCH": 10,
-    "ROLL": 10,
-    "YAW": 10
-}
-
 
 HEAVE_TARGET_OFFSET = -0.07
 HEAVE_KP = -45
@@ -72,24 +64,27 @@ YAW_KD = 0
 YAW_TARGET  = 270
 YAW_ACCEPTABLE_ERROR = 1
 
-
 def detection_callback(msg):
     global detections
     detections = list(msg.data) if msg.data else []
 
+
+
 class QualificationTask(StateMachine):
 
-    # States
-    waiting = State(initial=True)
-    initializing_sensors = State()
-    enabling_heave_pid = State()
-    waiting_to_yaw = State()
-    adjusting_yaw = State()
-    surging = State()
-    safety_routine = State()
-    gate_crossed = State()
-    surfacing = State()
-    finished = State(final=True)
+    FIRST_OR_DATA = None
+
+    waiting = State(initial=True, value=0)
+    initializing_sensors = State(value=1)
+    enabling_heave_pid = State(value=2)
+    waiting_to_yaw = State(value=3)
+    adjusting_yaw = State(value=4)
+    surging = State(value=5)
+    safety_routine = State(value=6)
+    gate_crossed = State(value=7)
+    surfacing = State(value=8)
+    finished = State(final=True, value=9)
+
 
     # Transitions
         # Initalization
@@ -103,22 +98,10 @@ class QualificationTask(StateMachine):
     yaw_to_surge = adjusting_yaw.to(surging)
     surge_to_yaw = surging.to(adjusting_yaw)
 
-        # Safety routine
-    surge_to_safety = surging.to(safety_routine)
-    yaw_to_safety = adjusting_yaw.to(safety_routine)
-    wait_to_safety = waiting_to_yaw.to(safety_routine)
-    safety_to_wait = safety_routine.to(waiting_to_yaw)
 
-        # Gate crossed
-    surge_to_gate_crossed = surging.to(gate_crossed)
-    gate_crossed_to_surfacing = gate_crossed.to(surfacing)
-
-        # Finishing
-    surfacing_to_finished = surfacing.to(finished)
     wait_to_finished = waiting_to_yaw.to(finished)
     adjusting_yaw_to_finished = adjusting_yaw.to(finished)
     surging_to_finished = surging.to(finished)
-
 
     def __init__(self):
         self.m = MotionController()
@@ -137,6 +120,9 @@ class QualificationTask(StateMachine):
         self.running = False
         self.surge_running = False
         self.safe_to_cross_gate = False
+
+        self.ledpub = rospy.Publisher('/control/led', Int16,queue_size=5)
+
         super(QualificationTask, self).__init__()
 
     def on_enter_waiting(self):
@@ -144,7 +130,7 @@ class QualificationTask(StateMachine):
         self.m.start()
         time.sleep(0.5)
         self.start_initializing_sensors()
-
+    
     def on_enter_initializing_sensors(self):
         print("Initializing Sensors.")
 
@@ -152,10 +138,15 @@ class QualificationTask(StateMachine):
         self.depth_sub = rospy.Subscriber(f"/{DATA_SOURCE}/depth", Float32, self.on_depth)
 
         self.m.set_control_mode(DoF.YAW, ControlMode.OPEN_LOOP)
-        time.sleep(4)
+        self.m.set_control_mode(DoF.PITCH, ControlMode.OPEN_LOOP)
+        self.m.set_control_mode(DoF.ROLL, ControlMode.OPEN_LOOP)
+        self.ledpub.publish(1)
+        time.sleep(3)
         self.enable_heave_pid_trans()
 
+
     def on_enter_enabling_heave_pid(self):
+        self.ledpub.publish(9)
         if PID_STATUS["HEAVE"]:
             print("Enabling Heave PID.")
 
@@ -172,12 +163,13 @@ class QualificationTask(StateMachine):
         print(f"Saving current orientation as initial orientation.{self.current_orientation}")
         self.initial_orientation = self.current_orientation
         self.heave_to_wait()
-
+    
     def on_enter_waiting_to_yaw(self):
-        print("Waiting to yaw.")  
-        
+        self.ledpub.publish(292)
+        print("Waiting to yaw.")
 
     def on_enter_adjusting_yaw(self, t, thrust,error):
+        self.ledpub.publish(146)
         print("Adjusting yaw.")
         if not self.running:
             self.running = True
@@ -197,7 +189,7 @@ class QualificationTask(StateMachine):
         print("Surging...")
         if not self.surge_running:
             self.surge_running = True
-            self.surge_thread = threading.Thread(target=self.apply_surge, args=(t,thrust), daemon=True)
+            self.surge_thread = threading.Thread(target=self.apply_surge, daemon=True)
             self.surge_thread.start()
 
     def on_exit_surging(self):
@@ -208,44 +200,20 @@ class QualificationTask(StateMachine):
         print("Surge stopped, thrust set to 0")
 
 
-    def on_enter_safety_routine(self):
-        print("Safety compromised, stopping all motion.")
-        self.m.setcontrol_mode(DoF.YAW, ControlMode.OPEN_LOOP)
-        self.m.setcontrol_mode(DoF.PITCH, ControlMode.OPEN_LOOP)
-        self.m.setcontrol_mode(DoF.ROLL, ControlMode.OPEN_LOOP)
-        self.m.setthrust(DoF.YAW, 0)
-        self.m.setthrust(DoF.PITCH, 0)
-        self.m.setthrust(DoF.ROLL, 0)
-        self.m.setthrust(DoF.SURGE, 0)
-        time.sleep(2)
-        print("Safety routine completed. Resuming...")
-        self.safety_to_wait()
-
-
-    def on_enter_gate_crossed(self):
-        pass
-
-    def on_enter_surfacing(self):
-        print("Surfacing...")
-        self.m.setcontrol_mode(DoF.HEAVE, ControlMode.OPEN_LOOP)
-        self.m.setthrust(DoF.HEAVE, 0)
-        self.surfacing_to_finished()
 
 
     def on_orientation(self, vec: Vector3):
-        if FIRST_OR_DATA:
+        if FIRST_OR_DATA is not None and FIRST_OR_DATA==True:
             self.initial_orientation = [vec.x, vec.y, vec.z]
             FIRST_OR_DATA = False
         self.current_orientation = [vec.x, vec.y, vec.z]
         self.m.set_current_point(DoF.ROLL, vec.x)
         self.m.set_current_point(DoF.PITCH, vec.y)
         self.m.set_current_point(DoF.YAW, vec.z)
-        print(f'Current Orientation : {self.current_orientation}')
 
     def on_depth(self, depth: Float32):
         self.current_depth = depth.data
         self.m.set_current_point(DoF.HEAVE, depth.data)
-        print(f'Current Depth : {self.current_depth}')
 
     def enable_heave_pid(self):
         self.m.set_pid_constants(
@@ -268,7 +236,6 @@ class QualificationTask(StateMachine):
         time.sleep(t)
         self.m.set_thrust(DoF.YAW, RESTING_YAW_THRUST)
         print(f"Yaw thrust set to {RESTING_YAW_THRUST}")
-        # time.sleep(t/2)
 
     def apply_surge(self):
         print(f"Applying surge thrust: {SURGE_THRUST}")
@@ -277,58 +244,44 @@ class QualificationTask(StateMachine):
         centerX = 0.50
         gate_area_array = []
         while 1:
-
-            if abs(self.initial_orientation[1] - self.current_orientation[1]) > SAFETY_LIMITS["PITCH"]:
-                self.surge_to_safety()
-            elif abs(self.initial_orientation[0] - self.current_orientation[0]) > SAFETY_LIMITS["ROLL"]:
-                self.surge_to_safety()
-            elif abs(self.initial_orientation[2] - self.current_orientation[2]) > SAFETY_LIMITS["YAW"]:
-                self.surge_to_safety()
-
             i=0
             if i + 4 >= len(detections):
                 continue
-            if len(detections) != 0:
-                xmin, ymin, xmax, ymax, confidence = detections[i:i+5]
-                targetX = (xmin + xmax) / 2
-                targetY = (ymin + ymax) / 2
-                aspectRatio = (xmax - xmin) / (ymax - ymin)
-                gate_area = (xmax - xmin) * (ymax - ymin)
-                gate_area_array.append(gate_area)
-                if len(gate_area_array) > 5:
-                    gate_area_array.pop(0)
+            xmin, ymin, xmax, ymax, confidence = detections[i:i+5]
+            targetX = (xmin + xmax) / 2
+            targetY = (ymin + ymax) / 2
+            aspectRatio = (xmax - xmin) / (ymax - ymin)
+            gate_area = (xmax - xmin) * (ymax - ymin)
+            gate_area_array.append(gate_area)
+            if len(gate_area_array) > 5:
+                gate_area_array.pop(0)
 
-                error = targetX - centerX
-                print(f'Error : {error}')
-                if abs(error) > OFFSET:
-                    break
-                elif sum(gate_area_array)/5 > AREA_THRESHOLD:
-                    self.safe_to_cross_gate = True
-                    break
+            error = targetX - centerX
+            # print(f'Error : {error}')
+            if abs(error) > OFFSET:
+                break
+            elif sum(gate_area_array)/5 > AREA_THRESHOLD:
+                self.safe_to_cross_gate = True
+                break
             
             
 
         self.m.set_thrust(DoF.SURGE, 0)
         print(f"Surge thrust set to 0")
-    
-    # def perform_safety_checks(self):
-    #     if self.initial_orientation[1] > SAFETY_LIMITS["PITCH"]:
-    #         self.yaw_to_safety()
-    #     elif self.initial_orientation[0] > SAFETY_LIMITS["ROLL"]:
-    #         self.yaw_to_safety()
-    #     elif self.initial_orientation[2] > SAFETY_LIMITS["YAW"]:
-    #         self.yaw_to_safety()
+        self.surge_to_yaw(0,0,0)
+
 
 QualificationStateMachine = QualificationTask()
 
 
+
 def process_detections():
 
-    if detections == []:
-        if QualificationStateMachine.is_surging:
-            QualificationStateMachine.surge_to_yaw()
-        elif QualificationStateMachine.is_adjusting_yaw:
-            QualificationStateMachine.wait_yaw()
+    # if detections == []:
+    #     if QualificationStateMachine.current_state == 5:
+    #         QualificationStateMachine.surge_to_yaw()
+    #     elif QualificationStateMachine.current_state_value == 4:
+    #         QualificationStateMachine.wait_yaw()
 
     centerX = 0.50
     # for i in range(0, len(detections), 5):
@@ -340,25 +293,28 @@ def process_detections():
         targetY = (ymin + ymax) / 2
         aspectRatio = (xmax - xmin) / (ymax - ymin)
         # print(f"Aspect Ratio: {aspectRatio}")
-
         error = targetX - centerX
-        print(f'Error : {error}')
-        if abs(error) > OFFSET:      
-            if QualificationStateMachine.is_waiting_to_yaw:
-                YAW_ADJUSTMENT_THRUST = error * YAW_THRUST
-                YAW_ADJUSTMENT_TIME = error * YAW_TIME
+    
+        if abs(error) > OFFSET:
+            YAW_ADJUSTMENT_THRUST = abs(error) * YAW_THRUST
+            YAW_ADJUSTMENT_TIME = abs(error) * YAW_TIME
+            if QualificationStateMachine.current_state_value == 3:
                 QualificationStateMachine.adjust_yaw(YAW_ADJUSTMENT_TIME,YAW_ADJUSTMENT_THRUST, error)
-            elif QualificationStateMachine.is_surging:
-                QualificationStateMachine.surge_to_yaw()
-
-        elif abs(error) <= OFFSET and QualificationStateMachine.is_adjusting_yaw:
-            QualificationStateMachine.yaw_to_surge()
-
+            elif QualificationStateMachine.current_state_value == 4:
+                QualificationStateMachine.wait_yaw()
+            elif QualificationStateMachine.current_state_value == 5:
+                QualificationStateMachine.surge_to_yaw(YAW_ADJUSTMENT_TIME,YAW_ADJUSTMENT_THRUST, error)
+                            
+        elif abs(error) <= OFFSET:
+            if QualificationStateMachine.current_state_value == 4:
+                QualificationStateMachine.yaw_to_surge()
+            if QualificationStateMachine.current_state_value == 3:
+                QualificationStateMachine.adjust_yaw()
+                QualificationStateMachine.yaw_to_surge()
 
 
 def main():
     rospy.Subscriber('/yolo_detections', Float32MultiArray, detection_callback)
-    # rospy.Subscriber('/yolo_frame', CompressedImage, frame_callback)
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
         process_detections()
@@ -370,6 +326,7 @@ def main():
             QualificationStateMachine.surge_to_finished()
         except:
             QualificationStateMachine.adjusting_yaw_to_finished()
+
 
 if __name__ == "__main__":
     try:
