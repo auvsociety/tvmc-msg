@@ -18,13 +18,13 @@ OFFSET = 40 / FRAME_WIDTH
 RESTING_YAW_THRUST = 0
 YAW_THRUST = 100
 YAW_ADJUSTMENT_THRUST = None
-YAW_TIME = 0.3
+YAW_TIME = 0.35
 YAW_ADJUSTMENT_TIME = None
 YAW_SEARCH_THRUST = 20
 
-SURGE_THRUST = 40
+SURGE_THRUST = 60
 
-AREA_THRESHOLD = 0.7 # (0,1)
+AREA_THRESHOLD = 0.65 # (0,1)
 
 
 DATA_SOURCE = "sensors"
@@ -40,7 +40,7 @@ HEAVE_TARGET_OFFSET = -0.07
 HEAVE_KP = -45
 HEAVE_KI = -0.05
 HEAVE_KD =  25
-HEAVE_TARGET = 0.25 - HEAVE_TARGET_OFFSET
+HEAVE_TARGET = 0.33 - HEAVE_TARGET_OFFSET
 HEAVE_ACCEPTABLE_ERROR = 0.05
 HEAVE_OFFSET = 0
 
@@ -80,7 +80,7 @@ class QualificationTask(StateMachine):
     waiting_to_yaw = State(value=3)
     adjusting_yaw = State(value=4)
     surging = State(value=5)
-    safety_routine = State(value=6)
+    #safety_routine = State(value=6)
     gate_crossed = State(value=7)
     surfacing = State(value=8)
     finished = State(final=True, value=9)
@@ -98,10 +98,13 @@ class QualificationTask(StateMachine):
     yaw_to_surge = adjusting_yaw.to(surging)
     surge_to_yaw = surging.to(adjusting_yaw)
 
+    surge_to_gate = surging.to(gate_crossed)
+    gate_to_surface = gate_crossed.to(surfacing)
 
     wait_to_finished = waiting_to_yaw.to(finished)
     adjusting_yaw_to_finished = adjusting_yaw.to(finished)
     surging_to_finished = surging.to(finished)
+    surface_to_finished = surfacing.to(finished)
 
     def __init__(self):
         self.m = MotionController()
@@ -129,7 +132,7 @@ class QualificationTask(StateMachine):
         print("Waiting to start.")
         self.m.start()
         time.sleep(0.5)
-        self.start_initializing_sensors()
+        self.initialize_sensors()
     
     def on_enter_initializing_sensors(self):
         print("Initializing Sensors.")
@@ -185,7 +188,7 @@ class QualificationTask(StateMachine):
         print("Yaw adjustment stopped, thrust set to 0")
 
 
-    def on_enter_surging(self, t, thrust):
+    def on_enter_surging(self):
         print("Surging...")
         if not self.surge_running:
             self.surge_running = True
@@ -198,14 +201,44 @@ class QualificationTask(StateMachine):
             self.surge_thread.join()
         self.m.set_thrust(DoF.SURGE, 0)
         print("Surge stopped, thrust set to 0")
+    
+    def on_enter_finished(self):
+        self.ledpub.publish(511)
+        print("Finished")
+    
+    def on_enter_gate_crossed(self):
+        print("Crossing Gate")
+        self.ledpub.publish(78)
+        self.m.set_thrust(DoF.SURGE, 60)
+        time.sleep(2.5)
+        self.m.set_thrust(DoF.SURGE, 0)
+        time.sleep(1)
+        self.m.set_thrust(DoF.YAW, -60)
+        time.sleep(3.5)
+        self.m.set_thrust(DoF.YAW, 0)
+        time.sleep(1)
+        self.m.set_thrust(DoF.SURGE, 60)
+        time.sleep(3)
+        self.m.set_thrust(DoF.SURGE, 0)
+        self.gate_to_surface()
+
+    def on_enter_surfacing(self):
+        print("Surfacing..")
+        self.ledpub.publish(511)
+        self.m.set_control_mode(DoF.HEAVE, ControlMode.OPEN_LOOP)
+        self.surface_to_finished()
+
+
+
+
 
 
 
 
     def on_orientation(self, vec: Vector3):
-        if FIRST_OR_DATA is not None and FIRST_OR_DATA==True:
-            self.initial_orientation = [vec.x, vec.y, vec.z]
-            FIRST_OR_DATA = False
+        #if FIRST_OR_DATA is not None and FIRST_OR_DATA==True:
+        #    self.initial_orientation = [vec.x, vec.y, vec.z]
+        #    FIRST_OR_DATA = False
         self.current_orientation = [vec.x, vec.y, vec.z]
         self.m.set_current_point(DoF.ROLL, vec.x)
         self.m.set_current_point(DoF.PITCH, vec.y)
@@ -238,6 +271,7 @@ class QualificationTask(StateMachine):
         print(f"Yaw thrust set to {RESTING_YAW_THRUST}")
 
     def apply_surge(self):
+        tn = time.time()
         print(f"Applying surge thrust: {SURGE_THRUST}")
         self.m.set_thrust(DoF.SURGE, SURGE_THRUST)
 
@@ -252,16 +286,17 @@ class QualificationTask(StateMachine):
             targetY = (ymin + ymax) / 2
             aspectRatio = (xmax - xmin) / (ymax - ymin)
             gate_area = (xmax - xmin) * (ymax - ymin)
-            gate_area_array.append(gate_area)
-            if len(gate_area_array) > 5:
+            gate_area_array.append(xmax-xmin)
+            if len(gate_area_array) > 2:
                 gate_area_array.pop(0)
 
             error = targetX - centerX
             # print(f'Error : {error}')
             if abs(error) > OFFSET:
                 break
-            elif sum(gate_area_array)/5 > AREA_THRESHOLD:
+            elif sum(gate_area_array)/2 > AREA_THRESHOLD:
                 self.safe_to_cross_gate = True
+                self.surge_to_gate()
                 break
             
             
@@ -277,9 +312,9 @@ QualificationStateMachine = QualificationTask()
 
 def process_detections():
 
-    # if detections == []:
-    #     if QualificationStateMachine.current_state == 5:
-    #         QualificationStateMachine.surge_to_yaw()
+    if detections == []:
+         if QualificationStateMachine.current_state == 5:
+             QualificationStateMachine.surge_to_yaw()
     #     elif QualificationStateMachine.current_state_value == 4:
     #         QualificationStateMachine.wait_yaw()
 
@@ -303,13 +338,16 @@ def process_detections():
             elif QualificationStateMachine.current_state_value == 4:
                 QualificationStateMachine.wait_yaw()
             elif QualificationStateMachine.current_state_value == 5:
-                QualificationStateMachine.surge_to_yaw(YAW_ADJUSTMENT_TIME,YAW_ADJUSTMENT_THRUST, error)
+               try:
+                   QualificationStateMachine.surge_to_yaw(YAW_ADJUSTMENT_TIME,YAW_ADJUSTMENT_THRUST, error)
+               except:
+                   print("Exception")
                             
         elif abs(error) <= OFFSET:
             if QualificationStateMachine.current_state_value == 4:
                 QualificationStateMachine.yaw_to_surge()
             if QualificationStateMachine.current_state_value == 3:
-                QualificationStateMachine.adjust_yaw()
+                QualificationStateMachine.adjust_yaw(0,0,0)
                 QualificationStateMachine.yaw_to_surge()
 
 
