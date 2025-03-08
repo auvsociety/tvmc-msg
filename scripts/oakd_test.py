@@ -4,7 +4,7 @@ import depthai as dai
 import time
 import numpy as np
 
-nnPath = './../yolo_models/beacon.blob'
+nnPath = './../yolo_models/gate.blob'
 
 labelMap = [
 	"Beacon"
