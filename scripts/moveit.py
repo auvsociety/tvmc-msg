@@ -13,30 +13,32 @@ import collections
 
 
 YAW_THRUST = 60
-ASYNC_ROTATION_DURATION = 3.15
-ASYNC_CLOCK_DURATION = 5.5
-SURGE_THRUST = 55
+ASYNC_ROTATION_DURATION = 2.5
+ASYNC_CLOCK_DURATION = 11
+ASYNC2_CLOCK_DURATION = 10
+SURGE_THRUST = 70
 ROTATION_YAW = 180
 
 # globals
 CURRENT_YAW = 0
 START_YAW = 0
 REVERSE_YAW = -1
+
+
 DATA_SOURCE = "sensors"
 
-
-HEAVE_TARGET_OFFSET = -0.07
-HEAVE_KP = -45 # -90 #-70 #-60 #-40 #-50 # -100
-HEAVE_KI = -0.05
-HEAVE_KD =  25# 5.2 #6.5
-HEAVE_TARGET = 0.25 - HEAVE_TARGET_OFFSET
-HEAVE_ACCEPTABLE_ERROR = 0
+HEAVE_TARGET_OFFSET = -0.08
+HEAVE_KP = -25 # -90 #-70 #-60 #-40 #-50 # -100
+HEAVE_KI = 0
+HEAVE_KD = 60 #30# 5.2 #6.5
+HEAVE_TARGET = 2.5 - HEAVE_TARGET_OFFSET
+HEAVE_ACCEPTABLE_ERROR = 0.05
 HEAVE_OFFSET = 0 #-0.13 # 0
 
-PITCH_TARGET_OFFSET = -5
-PITCH_KP = 0.4#-0.25  #0.8
-PITCH_KI = 0.001#0.02
-PITCH_KD = 0 # 0.15 #0.2
+PITCH_TARGET_OFFSET = -8
+PITCH_KP = -0.3#-0.25  #0.8
+PITCH_KI = 0#0.02
+PITCH_KD = 1# 0.15 #0.2
 PITCH_TARGET = 0 - PITCH_TARGET_OFFSET
 PITCH_ACCEPTABLE_ERROR = 1
 PITCH_OFFSET = 0 #5
@@ -47,10 +49,11 @@ ROLL_KD = 0
 ROLL_TARGET = 3
 ROLL_ACCEPTABLE_ERROR = 1
 
-YAW_KP = 5# 0.86
+YAW_TARGET_OFFSET = -3
+YAW_KP = -0.9
 YAW_KI = 0
-YAW_KD = 0 # 0.3
-YAW_TARGET  = 270
+YAW_KD = 3
+YAW_TARGET  = 82 - YAW_TARGET_OFFSET
 YAW_ACCEPTABLE_ERROR = 1
 
 
@@ -86,12 +89,6 @@ class QualificationTask(StateMachine):
         self.timer_2 = None
         self.timer_rotate = None
         self.led_publisher = rospy.Publisher("/control/led", LEDControl, queue_size=1)
-        self.led_message = LEDControl()
-        self.led_message.R = -1
-        self.led_message.G = -1
-        self.led_message.B = -1
-        self.led_message.led = 1
-        self.depth_led_done = False
 
         super(QualificationTask, self).__init__()
 
@@ -102,14 +99,8 @@ class QualificationTask(StateMachine):
         self.start_initializing_sensors()
 
     def on_depth(self, depth: Float32):
-        if not self.depth_led_done:
-            self.depth_led_done = True
-            self.led_message.B  = -1
-            self.led_publisher.publish(self.led_message)
 
         self.current_depth = depth.data
-        # print(self.current_depth)
-        # rospy.loginfo(f"Current Depth: {self.current_depth}")
         
         self.m.set_current_point(DoF.HEAVE, depth.data)
 
@@ -125,10 +116,6 @@ class QualificationTask(StateMachine):
 
     def on_enter_initializing_sensors(self):
         print("Initializing Sensors.")
-        self.led_message.R = -1
-        self.led_message.G = 0
-        self.led_message.B = -1
-        self.led_publisher.publish(self.led_message)
 
         self.m.set_pid_constants(DoF.YAW, YAW_KP, YAW_KI, YAW_KD, YAW_ACCEPTABLE_ERROR)
         self.orientation_sub = rospy.Subscriber(
@@ -136,58 +123,38 @@ class QualificationTask(StateMachine):
         )
         self.depth_sub = rospy.Subscriber(f"/{DATA_SOURCE}/depth", Float32, self.on_depth)
 
-        self.led_publisher.publish(self.led_message)
 
-        self.led_message.R = -1
-        self.led_message.B = 0
-        self.led_message.G = 0
-        self.led_publisher.publish(self.led_message)
-
-        # while self.current_depth is None or self.current_depth < 0.1:
-        #    time.sleep(0)
         
-        self.led_message.R = 3
-        self.led_message.B = 3
-        self.led_message.G = -1
-        self.led_publisher.publish(self.led_message)
            
         time.sleep(5)
 
-        self.led_message.R = 3
-        self.led_message.B = -1
-        self.led_publisher.publish(self.led_message)
-
         current_time = time.time()
-        samples = [173]
+        samples = [85]
 
         # while self.current_yaw is None:
         #     time.sleep(0)
+        self.yaw_lock = 85
 
         # while time.time() - current_time < 5:
         #     samples.append(self.current_yaw)
         #     time.sleep(0.1)
-        samples = [(360 - x if x >= 180 else x) for x in samples]
-        print(samples)
-        self.yaw_lock = (sum(samples) / len(samples))
-        self.yaw_lock = self.yaw_lock + 360 if self.yaw_lock < 0 else self.yaw_lock
+        #samples = [(360 - x if x >= 180 else x) for x in samples]
+        #print(samples)
+        #self.yaw_lock = (sum(samples) / len(samples))
+        #self.yaw_lock = self.yaw_lock + 360 if self.yaw_lock < 0 else self.yaw_lock
         print("Yaw locked at: ", self.yaw_lock)
 
-        self.led_message.R = 0
-        self.led_message.G = 1
-        self.led_publisher.publish(self.led_message)
         self.fix_yaw()
         # self.surge_forward_directly()
 
     def on_enter_fixing_yaw(self):
-        # print("Attempting to fix yaw.")
-        #self.set_yaw(self.yaw_lock)
-        #self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
+        print("Attempting to fix yaw.")
+        self.set_yaw(self.yaw_lock)
+        self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
 
-        # time.sleep(1)
-        # self.set_yaw(self.yaw_lock - 35)
-        # self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
-
-        # time.sleep(1)
+        while (self.current_yaw is None or abs(self.current_yaw - 85) > YAW_ACCEPTABLE_ERROR):
+            time.sleep(0.1)
+        
         # self.set_yaw(self.yaw_lock)
         # self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
 
@@ -200,13 +167,10 @@ class QualificationTask(StateMachine):
         # self.set_yaw(self.yaw_lock - 180)
         # self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
         
-        time.sleep(0.1)
-
-        self.m.set_thrust(DoF.YAW, YAW_THRUST)
-
-        if self.timer_rotate is None:
-            self.timer_rotate = threading.Thread(target=self.timer_async_rotate, daemon=True)
-            self.timer_rotate.start()
+        time.sleep(1.5)
+        self.set_yaw(255)
+        self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
+        
 
         
 
@@ -218,13 +182,15 @@ class QualificationTask(StateMachine):
 
         # self.m.set_thrust(DoF.YAW,YAW_THRUST)
 
-        # while (self.current_yaw is None or abs(self.current_yaw - target_yaw) > YAW_ACCEPTABLE_ERROR * 3):
-        #     time.sleep(0.1)
-
+        while (self.current_yaw is None or abs(self.current_yaw - 255) > YAW_ACCEPTABLE_ERROR):
+            time.sleep(0.1)
+        time.sleep(1)
         # self.m.set_thrust(DoF.YAW, 0)
         # -------------------------------------------------------------
 
-        #self.surging_after_yaw_180()
+        self.surging_after_yaw_180()
+        
+        
     def on_exit_yaw_180(self):
         print("Stopping Yaw")
         self.m.set_thrust(DoF.YAW, 0)
@@ -238,7 +204,7 @@ class QualificationTask(StateMachine):
 
     def on_enter_enabling_heave_pid(self):
         print("Enabling heave PID.")
-        
+        self.enable_pitch_pid()
         self.m.set_pid_constants(
             DoF.HEAVE,
             HEAVE_KP,
@@ -291,7 +257,7 @@ class QualificationTask(StateMachine):
 
     def timer_async_2(self):
         print("Timer 2 started")
-        time.sleep(ASYNC_CLOCK_DURATION)
+        time.sleep(ASYNC2_CLOCK_DURATION)
 
         self.finish()
 
@@ -303,7 +269,7 @@ class QualificationTask(StateMachine):
 
     def on_enter_surging_forward(self):
         #self.enable_pitch_pid()
-        time.sleep(4)
+        time.sleep(1)
 
         print("Surging forward")
         self.m.set_thrust(DoF.SURGE, SURGE_THRUST)
@@ -342,6 +308,7 @@ class QualificationTask(StateMachine):
     
     def on_enter_finished(self):
         self.disable_heave_pid()
+        self.disable_pitch_pid()
         
 
 

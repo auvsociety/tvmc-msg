@@ -7,23 +7,24 @@ from time import sleep
 from threading import Thread
 from std_msgs.msg import Float32MultiArray, Int32MultiArray, Float32
 from geometry_msgs.msg import Vector3
+import PID_CONSTANTS
 
 
-# DATA_SOURCE = "emulation"
+#DATA_SOURCE = "sensors"
 DATA_SOURCE = "sensors"
 
-HEAVE_TARGET_OFFSET = -0.07
-HEAVE_KP = -45 # -90 #-70 #-60 #-40 #-50 # -100
-HEAVE_KI = -0.05
-HEAVE_KD =  25# 5.2 #6.5
-HEAVE_TARGET = 0.25 - HEAVE_TARGET_OFFSET
-HEAVE_ACCEPTABLE_ERROR = 0
+HEAVE_TARGET_OFFSET = -0.08
+HEAVE_KP = -25 # -90 #-70 #-60 #-40 #-50 # -100
+HEAVE_KI = 0
+HEAVE_KD = 60 #30# 5.2 #6.5
+HEAVE_TARGET = 0.5 - HEAVE_TARGET_OFFSET
+HEAVE_ACCEPTABLE_ERROR = 0.05
 HEAVE_OFFSET = 0 #-0.13 # 0
 
-PITCH_TARGET_OFFSET = -5
-PITCH_KP = 0.4#-0.25  #0.8
-PITCH_KI = 0.001#0.02
-PITCH_KD = 0 # 0.15 #0.2
+PITCH_TARGET_OFFSET = -8
+PITCH_KP = -0.3#-0.25  #0.8
+PITCH_KI = 0#0.02
+PITCH_KD = 1# 0.15 #0.2
 PITCH_TARGET = 0 - PITCH_TARGET_OFFSET
 PITCH_ACCEPTABLE_ERROR = 1
 PITCH_OFFSET = 0 #5
@@ -34,11 +35,12 @@ ROLL_KD = 0
 ROLL_TARGET = 3
 ROLL_ACCEPTABLE_ERROR = 1
 
-YAW_KP = 5# 0.86
+YAW_TARGET_OFFSET = -3
+YAW_KP = -0.9
 YAW_KI = 0
-YAW_KD = 0 # 0.3
-YAW_TARGET  = 270
-YAW_ACCEPTABLE_ERROR = 1
+YAW_KD = 3
+YAW_TARGET  = 82 - YAW_TARGET_OFFSET
+YAW_ACCEPTABLE_ERROR = 0.5
 
 m = MotionController()
 term = blessings.Terminal()
@@ -136,6 +138,7 @@ def pid_enable(dof):
 
     if dof == DoF.YAW:
         m.set_pid_constants(DoF.YAW, YAW_KP, YAW_KI, YAW_KD, YAW_ACCEPTABLE_ERROR)
+        m.set_pid_limits(DoF.YAW, -10, 10, -25, 25)
         m.set_target_point(DoF.YAW, YAW_TARGET)
 
 
@@ -224,9 +227,7 @@ def data():
         set("Roll", x.x)
         set("Pitch", x.y)
         set("Yaw", x.z)
-
-        global YAW_TARGET
-        YAW_TARGET = x.z
+        
 
     rospy.Subscriber(f"/{DATA_SOURCE}/orientation", Vector3, orientation)
 

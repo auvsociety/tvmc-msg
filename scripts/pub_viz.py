@@ -13,7 +13,7 @@ def main():
     pub_detections = rospy.Publisher('/yolo_detections', Float32MultiArray, queue_size=10)
     pub_frame = rospy.Publisher('/yolo_frame', CompressedImage, queue_size=10)
     
-    nnPath = str((Path(__file__).parent / Path('./../yolo_models/beacon.blob')).resolve().absolute())
+    nnPath = str((Path(__file__).parent / Path('./../yolo_models/gate.blob')).resolve().absolute())
     labelMap = ["Beacon"]
     
     pipeline = dai.Pipeline()

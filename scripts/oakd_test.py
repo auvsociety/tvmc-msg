@@ -4,10 +4,10 @@ import depthai as dai
 import time
 import numpy as np
 
-nnPath = './../yolo_models/best_v5s_openvino_2022.1_6shave.blob'
+nnPath = './../yolo_models/beacon.blob'
 
 labelMap = [
-	"Gates"
+	"Beacon"
 ]
 syncNN = True
 
@@ -25,6 +25,7 @@ nnout.setStreamName("nn")
 
 # Properties
 cam.setPreviewSize(640,640)
+cam.setPreviewKeepAspectRatio(False)
 cam.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
 cam.setInterleaved(False)
 cam.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
