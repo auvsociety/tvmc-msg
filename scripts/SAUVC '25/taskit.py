@@ -45,18 +45,19 @@ PID_STATUS = {
 detections = []
 
 FRAME_WIDTH = 640
-OFFSET = 60 / FRAME_WIDTH
+NUM = 150
+OFFSET = NUM / FRAME_WIDTH
 
 RESTING_YAW_THRUST = 0
 YAW_THRUST = 75
 YAW_ADJUSTMENT_THRUST = None
-YAW_TIME = 0.25
+YAW_TIME = 0.5
 YAW_ADJUSTMENT_TIME = None
 YAW_SEARCH_THRUST = 20
 
-SURGE_THRUST = 10
+SURGE_THRUST = 60
 
-AREA_THRESHOLD = 0.64 # (0,1)
+AREA_THRESHOLD = 0.60 # (0,1)
 
 
 
@@ -172,7 +173,7 @@ class QualificationTask(StateMachine):
         print("Adjusting yaw.")
         if not self.running:
             self.running = True
-            yaw_direction = 1 if error > 0 else -0.9
+            yaw_direction = 0.3 if error > 0 else -1
             self.yaw_thread = threading.Thread(target=self.apply_yaw, args=(t,thrust,yaw_direction), daemon=True)
             self.yaw_thread.start()
 
@@ -184,12 +185,12 @@ class QualificationTask(StateMachine):
         print("Yaw adjustment stopped, thrust set to 0")
 
 
-    def on_enter_surging(self):
+    def on_enter_surging(self, error):
         self.ledpub.publish(84)
         print("Surging...")
         if not self.surge_running:
             self.surge_running = True
-            self.surge_thread = threading.Thread(target=self.apply_surge, daemon=True)
+            self.surge_thread = threading.Thread(target=self.apply_surge, args=(error,), daemon=True)
             self.surge_thread.start()
 
     def on_exit_surging(self):
@@ -207,11 +208,11 @@ class QualificationTask(StateMachine):
         print("Crossing Gate")
         self.ledpub.publish(78)
         self.m.set_thrust(DoF.SURGE, 40)
-        time.sleep(4)
+        time.sleep(6)
         self.m.set_thrust(DoF.SURGE, 0)
         time.sleep(1)
         self.m.set_thrust(DoF.YAW, -60)
-        time.sleep(3.5)
+        time.sleep(3.85)
         self.m.set_thrust(DoF.YAW, 0)
         time.sleep(1)
         self.m.set_thrust(DoF.SURGE, 60)
@@ -267,7 +268,13 @@ class QualificationTask(StateMachine):
         self.m.set_thrust(DoF.YAW, RESTING_YAW_THRUST)
         print(f"Yaw thrust set to {RESTING_YAW_THRUST}")
 
-    def apply_surge(self):
+    def apply_surge(self, error):
+        global NUM, OFFSET
+        NUM -= 5
+        if NUM < 111:
+            NUM = 111
+        OFFSET = NUM / FRAME_WIDTH
+
         tn = time.time()
         print(f"Applying surge thrust: {SURGE_THRUST}")
         self.m.set_thrust(DoF.SURGE, SURGE_THRUST)
@@ -313,10 +320,10 @@ QualificationStateMachine = QualificationTask()
 def process_detections():
 
     if detections == []:
-         if QualificationStateMachine.current_state == 5:
+        if QualificationStateMachine.current_state == 5:
              QualificationStateMachine.surge_to_yaw()
-    #     elif QualificationStateMachine.current_state_value == 4:
-    #         QualificationStateMachine.wait_yaw()
+        # elif QualificationStateMachine.current_state_value == 4:
+        #     QualificationStateMachine.wait_yaw()
 
     centerX = 0.50
     # for i in range(0, len(detections), 5):
@@ -328,11 +335,12 @@ def process_detections():
         targetY = (ymin + ymax) / 2
         aspectRatio = (xmax - xmin) / (ymax - ymin)
         # print(f"Aspect Ratio: {aspectRatio}")
-        if aspectRatio >0.5 and aspectRatio <0.9:
+        # if aspectRatio >0.5 and aspectRatio <0.9:
+        if True:
             error = targetX - centerX
     
-            if abs(error) > OFFSET:
-                YAW_ADJUSTMENT_THRUST = abs(error) * YAW_THRUST
+            if abs(error) > OFFSET and aspectRatio >0.4 and aspectRatio <0.9:
+                YAW_ADJUSTMENT_THRUST = abs(error * error) * YAW_THRUST
                 YAW_ADJUSTMENT_TIME = abs(error) * YAW_TIME
                 if QualificationStateMachine.current_state_value == 3:
                     QualificationStateMachine.adjust_yaw(YAW_ADJUSTMENT_TIME,YAW_ADJUSTMENT_THRUST, error)
@@ -345,11 +353,12 @@ def process_detections():
                         print("Exception")
                             
             elif abs(error) <= OFFSET:
+                
                 if QualificationStateMachine.current_state_value == 4:
-                    QualificationStateMachine.yaw_to_surge()
+                    QualificationStateMachine.yaw_to_surge(error)
                 if QualificationStateMachine.current_state_value == 3:
                     QualificationStateMachine.adjust_yaw(0,0,0)
-                    QualificationStateMachine.yaw_to_surge()
+                    QualificationStateMachine.yaw_to_surge(error)
 
 
 def main():
@@ -372,4 +381,5 @@ if __name__ == "__main__":
         main()
     except rospy.ROSInterruptException:
         pass
+
 

@@ -14,9 +14,9 @@ import collections
 
 YAW_THRUST = 60
 ASYNC_ROTATION_DURATION = 2.5
-ASYNC_CLOCK_DURATION = 11
-ASYNC2_CLOCK_DURATION = 10
-SURGE_THRUST = 70
+ASYNC_CLOCK_DURATION = 10
+ASYNC2_CLOCK_DURATION = 9
+SURGE_THRUST = 85
 ROTATION_YAW = 180
 
 # globals
@@ -31,7 +31,7 @@ HEAVE_TARGET_OFFSET = -0.08
 HEAVE_KP = -25 # -90 #-70 #-60 #-40 #-50 # -100
 HEAVE_KI = 0
 HEAVE_KD = 60 #30# 5.2 #6.5
-HEAVE_TARGET = 2.5 - HEAVE_TARGET_OFFSET
+HEAVE_TARGET = 0.3 - HEAVE_TARGET_OFFSET
 HEAVE_ACCEPTABLE_ERROR = 0.05
 HEAVE_OFFSET = 0 #-0.13 # 0
 
@@ -53,7 +53,7 @@ YAW_TARGET_OFFSET = -3
 YAW_KP = -0.9
 YAW_KI = 0
 YAW_KD = 3
-YAW_TARGET  = 82 - YAW_TARGET_OFFSET
+YAW_TARGET  = 118 - YAW_TARGET_OFFSET
 YAW_ACCEPTABLE_ERROR = 1
 
 
@@ -129,11 +129,11 @@ class QualificationTask(StateMachine):
         time.sleep(5)
 
         current_time = time.time()
-        samples = [85]
+        samples = [120]
 
         # while self.current_yaw is None:
         #     time.sleep(0)
-        self.yaw_lock = 85
+        self.yaw_lock = 121
 
         # while time.time() - current_time < 5:
         #     samples.append(self.current_yaw)
@@ -152,7 +152,7 @@ class QualificationTask(StateMachine):
         self.set_yaw(self.yaw_lock)
         self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
 
-        while (self.current_yaw is None or abs(self.current_yaw - 85) > YAW_ACCEPTABLE_ERROR):
+        while (self.current_yaw is None or abs(self.current_yaw - self.yaw_lock) > YAW_ACCEPTABLE_ERROR):
             time.sleep(0.1)
         
         # self.set_yaw(self.yaw_lock)
@@ -168,7 +168,7 @@ class QualificationTask(StateMachine):
         # self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
         
         time.sleep(1.5)
-        self.set_yaw(255)
+        self.set_yaw(self.yawlock + 180)
         self.m.set_control_mode(DoF.YAW, ControlMode.CLOSED_LOOP)
         
 
@@ -182,7 +182,7 @@ class QualificationTask(StateMachine):
 
         # self.m.set_thrust(DoF.YAW,YAW_THRUST)
 
-        while (self.current_yaw is None or abs(self.current_yaw - 255) > YAW_ACCEPTABLE_ERROR):
+        while (self.current_yaw is None or abs(self.current_yaw - self.yawlock + 180)> YAW_ACCEPTABLE_ERROR):
             time.sleep(0.1)
         time.sleep(1)
         # self.m.set_thrust(DoF.YAW, 0)

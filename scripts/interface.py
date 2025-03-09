@@ -7,7 +7,7 @@ from time import sleep
 from threading import Thread
 from std_msgs.msg import Float32MultiArray, Int32MultiArray, Float32
 from geometry_msgs.msg import Vector3
-import PID_CONSTANTS
+#import PID_CONSTANTS
 
 
 #DATA_SOURCE = "sensors"
@@ -17,7 +17,7 @@ HEAVE_TARGET_OFFSET = -0.08
 HEAVE_KP = -25 # -90 #-70 #-60 #-40 #-50 # -100
 HEAVE_KI = 0
 HEAVE_KD = 60 #30# 5.2 #6.5
-HEAVE_TARGET = 0.5 - HEAVE_TARGET_OFFSET
+HEAVE_TARGET = 1 - HEAVE_TARGET_OFFSET
 HEAVE_ACCEPTABLE_ERROR = 0.05
 HEAVE_OFFSET = 0 #-0.13 # 0
 
@@ -39,7 +39,7 @@ YAW_TARGET_OFFSET = -3
 YAW_KP = -0.9
 YAW_KI = 0
 YAW_KD = 3
-YAW_TARGET  = 82 - YAW_TARGET_OFFSET
+YAW_TARGET  = 60 - YAW_TARGET_OFFSET
 YAW_ACCEPTABLE_ERROR = 0.5
 
 m = MotionController()
