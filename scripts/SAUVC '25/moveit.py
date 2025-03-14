@@ -9,7 +9,7 @@ from statemachine import StateMachine, State
 from tvmc import MotionController, DoF, ControlMode
 
 from rose_tvmc_msg.msg import LEDControl
-import collections
+from PID_CONSTANTS import *
 
 
 YAW_THRUST = 60
@@ -23,39 +23,6 @@ ROTATION_YAW = 180
 CURRENT_YAW = 0
 START_YAW = 0
 REVERSE_YAW = -1
-
-
-DATA_SOURCE = "sensors"
-
-HEAVE_TARGET_OFFSET = -0.08
-HEAVE_KP = -25 # -90 #-70 #-60 #-40 #-50 # -100
-HEAVE_KI = 0
-HEAVE_KD = 60 #30# 5.2 #6.5
-HEAVE_TARGET = 0.3 - HEAVE_TARGET_OFFSET
-HEAVE_ACCEPTABLE_ERROR = 0.05
-HEAVE_OFFSET = 0 #-0.13 # 0
-
-PITCH_TARGET_OFFSET = -8
-PITCH_KP = -0.3#-0.25  #0.8
-PITCH_KI = 0#0.02
-PITCH_KD = 1# 0.15 #0.2
-PITCH_TARGET = 0 - PITCH_TARGET_OFFSET
-PITCH_ACCEPTABLE_ERROR = 1
-PITCH_OFFSET = 0 #5
-
-ROLL_KP = -0.2 #0.1
-ROLL_KI = 0
-ROLL_KD = 0
-ROLL_TARGET = 3
-ROLL_ACCEPTABLE_ERROR = 1
-
-YAW_TARGET_OFFSET = -3
-YAW_KP = -0.9
-YAW_KI = 0
-YAW_KD = 3
-YAW_TARGET  = 118 - YAW_TARGET_OFFSET
-YAW_ACCEPTABLE_ERROR = 1
-
 
 
 class QualificationTask(StateMachine):

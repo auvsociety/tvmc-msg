@@ -17,7 +17,7 @@ def frame_callback(msg):
     np_arr = np.frombuffer(msg.data, np.uint8)
     frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
     
-    if frame is not None and detections:
+    if detections:
         for i in range(0, len(detections), 5):
             xmin, ymin, xmax, ymax, confidence = detections[i:i+5]
             xmin, ymin, xmax, ymax = int(xmin * frame.shape[1]), int(ymin * frame.shape[0]), int(xmax * frame.shape[1]), int(ymax * frame.shape[0])
@@ -32,6 +32,9 @@ def frame_callback(msg):
             cv2.putText(frame, f"Center: ({center_x}, {center_y})", (xmin, ymin - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
             cv2.putText(frame, f"W: {width}, H: {height}", (xmin, ymin - 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
             cv2.putText(frame, f"AR: {aspect_ratio:.2f}", (xmin, ymin - 70), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+
+    if frame is not None:
+        
         cv2.imshow("YOLO Detections", frame)
         cv2.waitKey(1)
 
