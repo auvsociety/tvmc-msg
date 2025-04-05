@@ -16,7 +16,7 @@ HEAVE_TARGET_OFFSET = -0.08
 HEAVE_KP = -25 # -90 #-70 #-60 #-40 #-50 # -100
 HEAVE_KI = 0
 HEAVE_KD = 60 #30# 5.2 #6.5
-HEAVE_TARGET = 0.35 - HEAVE_TARGET_OFFSET
+HEAVE_TARGET = 0.47 - HEAVE_TARGET_OFFSET
 HEAVE_ACCEPTABLE_ERROR = 0.05
 HEAVE_OFFSET = 0 #-0.13 # 0
 
@@ -34,12 +34,12 @@ ROLL_KD = 0
 ROLL_TARGET = 3
 ROLL_ACCEPTABLE_ERROR = 1
 
-YAW_TARGET_OFFSET = -7.3
+YAW_TARGET_OFFSET = -5
 YAW_KP = -2
-YAW_KI = 0.02
-YAW_KD = 12
+YAW_KI = 0
+YAW_KD = 10
 YAW_TARGET  = 161 - YAW_TARGET_OFFSET
-YAW_ACCEPTABLE_ERROR = 0.05
+YAW_ACCEPTABLE_ERROR = 0.8
 #-----------------------------------------------
 
 
@@ -79,15 +79,23 @@ YAW_ACCEPTABLE_ERROR = 0.05
 #-----------------------------------------------
 
 YAW_THRUST = 60
-SURGE_THRUST = 50
 
 
+
+#SURGE_THRUST = 70
+#ASYNC_CLOCK_DURATION = 13.5
+
+#SURGE_THRUST = 50
+#ASYNC_CLOCK_DURATION = 16
+
+SURGE_THRUST = 90
+ASYNC_CLOCK_DURAION = 11
 
 ROTATION_YAW = 180
 
-ASYNC_CLOCK_DURATION = 7
-ASYNC2_CLOCK_DURATION = 2
-ASYNC_YAW_CLOCK_DURATION = 3.5
+
+ASYNC2_CLOCK_DURATION = 4
+ASYNC_YAW_CLOCK_DURATION = 2.45
 
 class QualificationTask(StateMachine):
     wait_to_start = State(initial=True)
@@ -119,7 +127,7 @@ class QualificationTask(StateMachine):
         self.timer = None
         self.timer_2 = None
         self.led_publisher = rospy.Publisher("/control/led", Int16, queue_size=1)
-
+        self.timer_rot = None
         super(QualificationTask, self).__init__()
 
     def on_enter_wait_to_start(self):
@@ -212,17 +220,19 @@ class QualificationTask(StateMachine):
 
     def on_exit_surging_forward(self):
         print("Stopping Surge.")
+        self.m.set_control_mode(DoF.YAW, ControlMode.OPEN_LOOP)
         self.m.set_thrust(DoF.SURGE, 0)
 
     # manual yaw
     def on_enter_yaw_180(self):
         self.led_publisher.publish(8)
+        time.sleep(0.5)
         print("Attempting to yaw 180. manually")
         self.m.set_thrust(DoF.YAW, YAW_THRUST)
 
-        if self.timer is None:
-            self.timer = threading.Thread(target=self.timer_async_yaw_manual, daemon=True)
-            self.timer.start()
+        if self.timer_rot is None:
+            self.timer_rot = threading.Thread(target=self.timer_async_yaw_manual, daemon=True)
+            self.timer_rot.start()
 
 
     # # pid yaw
