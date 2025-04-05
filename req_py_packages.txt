@@ -1,0 +1,9 @@
+blessings
+cv_bridge==1.16.2
+depthai==2.24.0.0
+numpy==1.24.4
+opencv_contrib_python==4.5.5.62
+rospy==1.17.0
+sensor_msgs==1.13.1
+python-statemachine
+sshkeyboard==2.3.1
