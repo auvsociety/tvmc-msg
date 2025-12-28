@@ -189,11 +189,13 @@ mp = {
 
 
 def press(key):
+    print(f"Press: {key}")
     if key in mp:
         mp[key][0]()
 
 
 def release(key):
+    print(f"Release: {key}")
     if key in mp:
         mp[key][1]()
 
