@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-from sshkeyboard import listen_keyboard, stop_listening
+# from sshkeyboard import listen_keyboard, stop_listening
+from pynput import keyboard
 from tvmc import MotionController, DoF, ControlMode
 import blessings
 import rospy
@@ -252,6 +253,25 @@ def data():
 
     rospy.Subscriber(f"/{DATA_SOURCE}/depth", Float32, depth)
 
+def on_press(key):
+    try:
+        k = key.char
+        print(f"Pressed: {k}")
+        if k in mp:
+            mp[k][0]()
+    except AttributeError:
+        if key == keyboard.Key.esc:
+            return False  #kill prog
+
+def on_release(key):
+    try:
+        k = key.char
+        print(f"Released: {k}")
+        if k in mp:
+            mp[k][1]()
+    except AttributeError:
+        pass
+        
 
 if __name__ == "__main__":
     print(term.red("Starting nodes.\n\n"))
@@ -262,10 +282,8 @@ if __name__ == "__main__":
 
     data()
 
-    listen_keyboard(
-        on_press=press,
-        on_release=release,
-    )
+    with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+        listener.join()
 
     keep_rendering = False
     print(term.clear())
