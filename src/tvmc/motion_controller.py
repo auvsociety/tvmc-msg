@@ -22,7 +22,7 @@ class MotionController:
         rospy.init_node("motion_controller")
 
         # create publishers
-        self._thruster_pub = Publisher(f"{PREFIX}/thrust", msg.Thrust, queue_size=50)
+        # self._thruster_pub = Publisher(f"{PREFIX}/thrust", msg.Thrust, queue_size=50)
         self._command_pub = Publisher(f"{PREFIX}/command", msg.Command, queue_size=50)
         self._control_mode_pub = Publisher(
             f"{PREFIX}/control_mode", msg.ControlMode, queue_size=50
@@ -38,6 +38,9 @@ class MotionController:
         )
         self._target_state_pub = Publisher(
             f"{PREFIX}/target_point", msg.TargetPoint, queue_size=50
+        )
+        self._multi_thrust_pub = Publisher(
+            f"{PREFIX}/multi_thrust", msg.MultiThrust, queue_size=50
         )
 
         # create spinner thread
@@ -65,18 +68,32 @@ class MotionController:
         # sleep for a second to ensure nodes are all started up
         sleep(1)
 
-    def set_thrust(self, dof: DoF, thrust: float) -> None:
-        # ensure control mode is in open loop mode
-        if self.controlModes[dof] == ControlMode.CLOSED_LOOP:
-            raise AssertionError(
-                f"Cannot set thrust for DoF {dof} in closed loop mode."
-            )
+    # def set_thrust(self, dof: DoF, thrust: float) -> None:
+    #     # ensure control mode is in open loop mode
+    #     if self.controlModes[dof] == ControlMode.CLOSED_LOOP:
+    #         raise AssertionError(
+    #             f"Cannot set thrust for DoF {dof} in closed loop mode."
+    #         )
 
-        t = msg.Thrust()
-        t.DoF = dof.value
-        t.Thrust = thrust
+    #     t = msg.Thrust()
+    #     t.DoF = dof.value
+    #     t.Thrust = thrust
 
-        self._thruster_pub.publish(t)
+    #     self._thruster_pub.publish(t)
+
+    def set_multi_thrust(self, surge=0, sway=0, heave=0, roll=0, pitch=0, yaw=0) -> None:
+        #set thrust for all DoFs in open loop
+        mt = msg.MultiThrust()
+        mt.surge = surge
+        mt.sway = sway
+        mt.heave = heave
+        mt.roll = roll
+        mt.pitch = pitch
+        mt.yaw = yaw
+
+        self._multi_thrust_pub.publish(mt)
+    
+
 
     def set_control_mode(self, dof: DoF, control: ControlMode) -> None:
         mode = msg.ControlMode()

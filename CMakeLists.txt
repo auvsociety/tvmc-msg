@@ -20,7 +20,7 @@ add_message_files(
   PidConstants.msg
   PidLimits.msg
   TargetPoint.msg
-  Thrust.msg
+  MultiThrust.msg
   LEDControl.msg
 )
 

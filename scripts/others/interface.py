@@ -91,19 +91,32 @@ def render():
     print(term.exit_fullscreen())
 
 
+thrust_values = {dof: 0 for dof in DoF}
+def update_thrust():
+    #publish all current thrust values
+    m.set_multi_thrust(
+        surge=thrust_values[DoF.SURGE],
+        sway=thrust_values[DoF.SWAY],
+        heave=thrust_values[DoF.HEAVE],
+        roll=thrust_values[DoF.ROLL],
+        pitch=thrust_values[DoF.PITCH],
+        yaw=thrust_values[DoF.YAW]
+    )
+
 def thrust(dof, rev=1):
     def p():
         if dof in closed_loop_enabled:
             return
-
-        m.set_thrust(dof, 50 * rev)
+        thrust_values[dof] = 50 * rev
+        update_thrust()
         currently_doing.add(dof)
 
     def r():
         if dof in closed_loop_enabled:
             return
 
-        m.set_thrust(dof, 0)
+        thrust_values[dof] = 0
+        update_thrust()  
         currently_doing.remove(dof)
 
     return p, r
