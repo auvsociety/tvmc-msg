@@ -83,6 +83,11 @@ class MotionController:
 
     def set_multi_thrust(self, surge=0, sway=0, heave=0, roll=0, pitch=0, yaw=0) -> None:
         #set thrust for all DoFs in open loop
+        # Check for closed loop modes - can't set thrust manually for those DoFs
+        for dof, value in [(DoF.SURGE, surge), (DoF.SWAY, sway), (DoF.HEAVE, heave), (DoF.ROLL, roll), (DoF.PITCH, pitch), (DoF.YAW, yaw)]:
+            if self.controlModes[dof] == ControlMode.CLOSED_LOOP and value != 0:
+                raise AssertionError(f"Cannot set thrust for DoF {dof.name} in closed loop mode.")  
+        
         mt = msg.MultiThrust()
         mt.surge = surge
         mt.sway = sway
