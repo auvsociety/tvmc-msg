@@ -1,22 +1,29 @@
-import rose_tvmc_msg.msg as msg
+"""
+BiBi-Sync TVMC Enums
+Pure Python enums without ROS dependency
+"""
+
 from enum import IntEnum
 
 
 class DoF(IntEnum):
-    SURGE = msg.DoF.SURGE
-    SWAY = msg.DoF.SWAY
-    HEAVE = msg.DoF.HEAVE
-    YAW = msg.DoF.YAW
-    PITCH = msg.DoF.PITCH
-    ROLL = msg.DoF.ROLL
+    """Degrees of Freedom"""
+    SURGE = 0
+    SWAY = 1
+    HEAVE = 2
+    ROLL = 3
+    PITCH = 4
+    YAW = 5
 
 
 class ControlMode(IntEnum):
-    OPEN_LOOP = msg.ControlMode.OPEN_LOOP
-    CLOSED_LOOP = msg.ControlMode.CLOSED_LOOP
+    """Control modes for each DoF"""
+    CLOSED_LOOP = 0
+    OPEN_LOOP = 1
 
 
 class Command(IntEnum):
-    RESET_THRUSTERS = msg.Command.RESET_THRUSTERS
-    REFRESH = msg.Command.REFRESH
-    SHUT_DOWN = msg.Command.SHUT_DOWN
+    """Commands for motion controller"""
+    RESET_THRUSTERS = 0
+    REFRESH = 1
+    SHUT_DOWN = 2
